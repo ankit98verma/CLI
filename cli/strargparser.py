@@ -43,14 +43,6 @@ class Command:
 
         return string
 
-    def add_inifinite_args(self, inf_type):
-        self.inf_positional = True
-        self.inf_type = inf_type
-
-    def remove_inifinite_args(self):
-        self.inf_positional = False
-        self.inf_type = None
-
     def show_help(self, out_func=print):
         string = self.__repr__()
         string += "\n\n"
@@ -76,6 +68,14 @@ class Command:
         if self.inf_positional:
             string += "Infinite positional parameters\n"
         out_func(string)
+
+    def add_infinite_args(self, inf_type):
+        self.inf_positional = True
+        self.inf_type = inf_type
+
+    def remove_infinite_args(self):
+        self.inf_positional = False
+        self.inf_type = None
 
     def add_positional_arguments(self, description, param_type=str):
         self.has_positional = True
@@ -151,7 +151,6 @@ class Command:
             else:
                 if current_key in shs:
                     bundle[current_key].append(o)
-
         return bundle
 
     def convert_type(self, vals, type):
@@ -171,8 +170,8 @@ class Command:
 
     def process_bundle(self, bundle):
         res_bundle = bundle.copy()
-        pos_str = 'pos_args'
-        inf_str = 'inf_args'
+        pos_str = 'pos'
+        inf_str = 'inf'
         res_bundle[pos_str] = []
         res_bundle[inf_str] = []
         got_args = list(bundle.keys())
@@ -182,7 +181,6 @@ class Command:
             return bundle
         # now check if all the compulsory arguments are present
         com_shs = list(self.compulsory_arguments.keys())
-        opt_shs = list(self.optional_arguments.keys())
         res = all(ele in got_args for ele in com_shs)
         if not res:
             print("All compulsory arguments are not present")
@@ -193,38 +191,48 @@ class Command:
         rem_pos_count = len(self.positional_arguments.keys())
         for k, v in bundle.items():
             if k in com_shs:
-                proc_dict = self.compulsory_arguments[k]
+                processing_dict = self.compulsory_arguments[k]
             else:
-                proc_dict = self.optional_arguments[k]
-            extra_arg_len = len(v) - proc_dict['narg']
+                processing_dict = self.optional_arguments[k]
+            extra_arg_len = len(v) - processing_dict['narg']
             if extra_arg_len > 0:
                 # there are either some/all positional arguments or some extra arguments are given or infinite arguments
                 if (rem_pos_count > 0 and rem_pos_count - extra_arg_len >= 0) or self.inf_positional:
                     # there are some positional arguments
-                    res_bundle[k] = v[:proc_dict['narg']]
-                    if self.inf_positional:
-                        res_bundle[inf_str].extend(v[proc_dict['narg']:])
+                    res_bundle[k] = v[:processing_dict['narg']]
+                    if rem_pos_count > 0 and rem_pos_count - extra_arg_len >= 0:
+                        rem_pos_count -= extra_arg_len
+                        res_bundle[pos_str].extend(v[processing_dict['narg']:])
+                    else:
+                        res_bundle[inf_str].extend(v[processing_dict['narg']:])
                         continue
-                    rem_pos_count -= extra_arg_len
-                    res_bundle[pos_str].extend(v[proc_dict['narg']:])
                 else:
                     print("More than required no. of values are given for argument: %s" % k)
                     return None
             elif extra_arg_len < 0:
                 print("For argument: %s. \n\tRequired no. of value is: %d  \n\tGiven number of value is: %s"
-                      % (k, proc_dict['narg'], len(v)))
+                      % (k, processing_dict['narg'], len(v)))
                 print("\nLess number of values are given for %s" % k)
                 return None
-
-            # Todo: convert the positional arguments to proper type
             try:
-                res_bundle[k] = self.convert_type(res_bundle[k].copy(), proc_dict['type'])
+                res_bundle[k] = self.convert_type(res_bundle[k].copy(), processing_dict['type'])
             except ValueError:
                 print("Wrong value is given for argument %s" % k)
                 return None
+
         if rem_pos_count > 0:
             print("All positional arguments are not found")
             return None
+        ii = 1
+        res_list = []
+        for v in res_bundle[pos_str]:
+            try:
+                res_list.extend(self.convert_type([v], self.positional_arguments[ii]['type']))
+            except ValueError:
+                print("Wrong value is given for argument %s" % v)
+                return None
+            ii += 1
+        res_bundle[pos_str] = res_list
 
         try:
             res_bundle[inf_str] = self.convert_type(res_bundle[inf_str].copy(), self.inf_type)
