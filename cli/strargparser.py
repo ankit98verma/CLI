@@ -186,8 +186,8 @@ class Command:
             print("All compulsory arguments are not present")
             return None
 
-        # now we got all the compulsory arguments, along with optional an positional arguments
-        # positional arguments are mixed up in the compulsory and optional arguments
+        # now we got all the compulsory arguments, along with optional, and/or positional arguments and/or infinite args
+        # positional and infinite arguments (if present) are mixed up in the compulsory and optional arguments
         rem_pos_count = len(self.positional_arguments.keys())
         for k, v in bundle.items():
             if k in com_shs:
@@ -197,18 +197,28 @@ class Command:
             extra_arg_len = len(v) - processing_dict['narg']
             if extra_arg_len > 0:
                 # there are either some/all positional arguments or some extra arguments are given or infinite arguments
-                if (rem_pos_count > 0 and rem_pos_count - extra_arg_len >= 0) or self.inf_positional:
+                if rem_pos_count > 0:
                     # there are some positional arguments
                     res_bundle[k] = v[:processing_dict['narg']]
-                    if rem_pos_count > 0 and rem_pos_count - extra_arg_len >= 0:
+                    if rem_pos_count - extra_arg_len >= 0:
                         rem_pos_count -= extra_arg_len
                         res_bundle[pos_str].extend(v[processing_dict['narg']:])
+                    elif self.inf_positional:
+                        res_bundle[pos_str].extend(v[processing_dict['narg']:][:rem_pos_count])
+                        res_bundle[inf_str].extend(v[processing_dict['narg']:][rem_pos_count:])
+                        rem_pos_count = 0
                     else:
+                        print("More than required no. of values are given for argument: %s" % k)
+                        return None
+                else:
+                    if self.inf_positional:
+                        # there are some infinite arguments
+                        res_bundle[k] = v[:processing_dict['narg']]
                         res_bundle[inf_str].extend(v[processing_dict['narg']:])
                         continue
-                else:
-                    print("More than required no. of values are given for argument: %s" % k)
-                    return None
+                    else:
+                        print("More than required no. of values are given for argument: %s" % k)
+                        return None
             elif extra_arg_len < 0:
                 print("For argument: %s. \n\tRequired no. of value is: %d  \n\tGiven number of value is: %s"
                       % (k, processing_dict['narg'], len(v)))
