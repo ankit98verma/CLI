@@ -20,6 +20,7 @@ class Command:
         self.function = function
 
         self.inf_positional = inf_positional
+        self.inf_type = None
         self.has_positional = False
         self.has_optional = True
         self.has_compulsory = False
@@ -42,6 +43,14 @@ class Command:
 
         return string
 
+    def add_inifinite_args(self, inf_type):
+        self.inf_positional = True
+        self.inf_type = inf_type
+
+    def remove_inifinite_args(self):
+        self.inf_positional = False
+        self.inf_type = None
+
     def show_help(self, out_func=print):
         string = self.__repr__()
         string += "\n\n"
@@ -57,22 +66,23 @@ class Command:
             string += "compulsory arguments with options:\n"
             for v in self.compulsory_arguments.values():
                 string += "\t" + v['sh'] + "\t" + str(v['type']).replace('<class ', "").replace(">", "") + "\t" + v[
-                    'lf'] + "\t" + v['des'] + "\n"
+                    'lf'] + "\t" + v['des'] + ". No. of values required: "+str(v['narg']) + "\n"
 
         if self.has_optional:
             string += "optional arguments with options:\n"
             for v in self.optional_arguments.values():
                 string += "\t" + v['sh'] + "\t" + str(v['type']).replace('<class ', "").replace(">", "") + "\t" + v[
-                    'lf'] + "\t" + v['des'] + "\n"
+                    'lf'] + "\t" + v['des'] + ". No. of values required: "+str(v['narg']) + "\n"
         if self.inf_positional:
             string += "Infinite positional parameters\n"
         out_func(string)
 
-    def add_positional_arguments(self, description, narg=1, param_type=str):
+    def add_positional_arguments(self, description, param_type=str):
         self.has_positional = True
         position = len(self.positional_arguments.keys()) + 1
         short_form = str(position)
         long_form = short_form
+        narg = 1
         self.positional_arguments[position] = dict()
         self.positional_arguments[position]['sh'] = short_form
         self.positional_arguments[position]['lf'] = long_form
@@ -134,34 +144,95 @@ class Command:
         current_key = ""
         shs = self.get_sh_list()
         for o in options:
-            if '-' in o and o in shs:
+            if '-' in o:
                 current_key = o
-                if current_key not in list(bundle.keys()):
+                if current_key in shs and current_key not in list(bundle.keys()):
                     bundle[current_key] = []
             else:
-                bundle[current_key].append(o)
+                if current_key in shs:
+                    bundle[current_key].append(o)
 
         return bundle
 
+    def convert_type(self, vals, type):
+        res = []
+        if type == bool:
+            for v in vals:
+                if v == 'true':
+                    res.append(True)
+                elif v == 'false':
+                    res.append(False)
+                else:
+                    raise ValueError
+        else:
+            for v in vals:
+                res.append(type(v))
+        return res
+
     def process_bundle(self, bundle):
+        res_bundle = bundle.copy()
+        pos_str = 'pos_args'
+        inf_str = 'inf_args'
+        res_bundle[pos_str] = []
+        res_bundle[inf_str] = []
         got_args = list(bundle.keys())
+
         # first check if -h is in arguments
         if '-h' in got_args:
             return bundle
         # now check if all the compulsory arguments are present
         com_shs = list(self.compulsory_arguments.keys())
+        opt_shs = list(self.optional_arguments.keys())
         res = all(ele in got_args for ele in com_shs)
         if not res:
             print("All compulsory arguments are not present")
             return None
 
-        # now we got all the compulsory arguments
+        # now we got all the compulsory arguments, along with optional an positional arguments
+        # positional arguments are mixed up in the compulsory and optional arguments
+        rem_pos_count = len(self.positional_arguments.keys())
+        for k, v in bundle.items():
+            if k in com_shs:
+                proc_dict = self.compulsory_arguments[k]
+            else:
+                proc_dict = self.optional_arguments[k]
+            extra_arg_len = len(v) - proc_dict['narg']
+            if extra_arg_len > 0:
+                # there are either some/all positional arguments or some extra arguments are given or infinite arguments
+                if (rem_pos_count > 0 and rem_pos_count - extra_arg_len >= 0) or self.inf_positional:
+                    # there are some positional arguments
+                    res_bundle[k] = v[:proc_dict['narg']]
+                    if self.inf_positional:
+                        res_bundle[inf_str].extend(v[proc_dict['narg']:])
+                        continue
+                    rem_pos_count -= extra_arg_len
+                    res_bundle[pos_str].extend(v[proc_dict['narg']:])
+                else:
+                    print("More than required no. of values are given for argument: %s" % k)
+                    return None
+            elif extra_arg_len < 0:
+                print("For argument: %s. \n\tRequired no. of value is: %d  \n\tGiven number of value is: %s"
+                      % (k, proc_dict['narg'], len(v)))
+                print("\nLess number of values are given for %s" % k)
+                return None
 
+            # Todo: convert the positional arguments to proper type
+            try:
+                res_bundle[k] = self.convert_type(res_bundle[k].copy(), proc_dict['type'])
+            except ValueError:
+                print("Wrong value is given for argument %s" % k)
+                return None
+        if rem_pos_count > 0:
+            print("All positional arguments are not found")
+            return None
 
-        # for k, v in bundle:
-        #     if len(v) > self.compulsory_arguments[k]['narg']:
-        #
+        try:
+            res_bundle[inf_str] = self.convert_type(res_bundle[inf_str].copy(), self.inf_type)
+        except ValueError:
+            print("Wrong value is given for infinite arguments")
+            return None
 
+        return res_bundle
 
     def decode_argument(self, options, vals, is_compulsory=False):
         res = dict()
@@ -218,6 +289,7 @@ class Command:
         options = self.standardize(options)
         bundle = self.bundle_data(options.copy())
         proc = self.process_bundle(bundle)
+        print(proc)
 
         res, options = self.decode_argument(options, self.optional_arguments.values())
         if res is None:
@@ -286,7 +358,7 @@ class StrArgParser:
 
     def add_command(self, command, description, inf_positional=False, function=None):
         c = Command(command, description, inf_positional, function)
-        c.add_optional_arguments('-h', '--help', 'Gives the details of the command', param_type=None)
+        c.add_optional_arguments('-h', '--help', 'Gives the details of the command', narg=0, param_type=None)
         c.add_optional_arguments('->', '->', 'Overwrite the output to the file')
         c.add_optional_arguments('->>', '->>', 'Append the output to the file')
         self.commands[command] = c

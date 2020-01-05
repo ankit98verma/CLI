@@ -39,7 +39,7 @@ if __name__ == '__main__':
     par.get_command('c1').add_compulsory_arguments('-f', '--file', "The file name")
     par.get_command('c1').add_compulsory_arguments('-c', '--com', "The compulsory item name")
     par.get_command('c1').add_optional_arguments('-n', '--number', "A number", param_type=int)
-    par.get_command('c1').add_optional_arguments('-o', '--option', "An option", param_type=None)
+    par.get_command('c1').add_optional_arguments('-o', '--option', "An option", narg=0, param_type=None)
     par.get_command('c1').add_positional_arguments('First pos arg')
     par.get_command('c1').add_positional_arguments('Second pos arg')
 
