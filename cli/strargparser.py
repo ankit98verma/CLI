@@ -68,29 +68,100 @@ class Command:
             string += "Infinite positional parameters\n"
         out_func(string)
 
-    def add_positional_arguments(self, position, short_form, long_form, description, param_type=str):
+    def add_positional_arguments(self, description, narg=1, param_type=str):
         self.has_positional = True
+        position = len(self.positional_arguments.keys()) + 1
+        short_form = str(position)
+        long_form = short_form
         self.positional_arguments[position] = dict()
         self.positional_arguments[position]['sh'] = short_form
         self.positional_arguments[position]['lf'] = long_form
         self.positional_arguments[position]['des'] = description
         self.positional_arguments[position]['type'] = param_type
+        self.positional_arguments[position]['narg'] = narg
 
-    def add_optional_arguments(self, short_form, long_form, description, param_type=str):
+    def add_optional_arguments(self, short_form, long_form, description, narg=1, param_type=str):
         self.has_optional = True
         self.optional_arguments[short_form] = dict()
         self.optional_arguments[short_form]['sh'] = short_form
         self.optional_arguments[short_form]['lf'] = long_form
         self.optional_arguments[short_form]['des'] = description
         self.optional_arguments[short_form]['type'] = param_type
+        self.optional_arguments[short_form]['narg'] = narg
 
-    def add_compulsory_arguments(self, short_form, long_form, description, param_type=str):
+    def add_compulsory_arguments(self, short_form, long_form, description, narg=1, param_type=str):
         self.has_compulsory = True
         self.compulsory_arguments[short_form] = dict()
         self.compulsory_arguments[short_form]['sh'] = short_form
         self.compulsory_arguments[short_form]['lf'] = long_form
         self.compulsory_arguments[short_form]['des'] = description
         self.compulsory_arguments[short_form]['type'] = param_type
+        self.compulsory_arguments[short_form]['narg'] = narg
+
+    def get_sh_list(self):
+        com_sh = list(self.compulsory_arguments.keys())
+        opt_sh = list(self.optional_arguments.keys())
+        com_sh.extend(opt_sh)
+        return com_sh
+
+    def get_lf_list(self):
+        com_vals = list(self.compulsory_arguments.values())
+        com_lf = []
+        for i in com_vals:
+            com_lf.append(i['lf'])
+        opt_vals = list(self.optional_arguments.values())
+        opt_lf = []
+        for i in opt_vals:
+            opt_lf.append(i['lf'])
+        com_lf.extend(opt_lf)
+        return com_lf
+
+    def standardize(self, options):
+        shs = self.get_sh_list()
+        lfs = self.get_lf_list()
+
+        options2 = options.copy()
+        i = 0
+        for o in options:
+            if o in lfs:
+                ind = lfs.index(o)
+                options2[i] = shs[ind]
+            i += 1
+        return options2
+
+    def bundle_data(self, options):
+        bundle = dict()
+        current_key = ""
+        shs = self.get_sh_list()
+        for o in options:
+            if '-' in o and o in shs:
+                current_key = o
+                if current_key not in list(bundle.keys()):
+                    bundle[current_key] = []
+            else:
+                bundle[current_key].append(o)
+
+        return bundle
+
+    def process_bundle(self, bundle):
+        got_args = list(bundle.keys())
+        # first check if -h is in arguments
+        if '-h' in got_args:
+            return bundle
+        # now check if all the compulsory arguments are present
+        com_shs = list(self.compulsory_arguments.keys())
+        res = all(ele in got_args for ele in com_shs)
+        if not res:
+            print("All compulsory arguments are not present")
+            return None
+
+        # now we got all the compulsory arguments
+
+
+        # for k, v in bundle:
+        #     if len(v) > self.compulsory_arguments[k]['narg']:
+        #
+
 
     def decode_argument(self, options, vals, is_compulsory=False):
         res = dict()
@@ -144,6 +215,10 @@ class Command:
 
     def decode_options(self, options):
 
+        options = self.standardize(options)
+        bundle = self.bundle_data(options.copy())
+        proc = self.process_bundle(bundle)
+
         res, options = self.decode_argument(options, self.optional_arguments.values())
         if res is None:
             return None
@@ -173,6 +248,7 @@ class Command:
                     else:
                         val = v['type'](options[0])
                     res[v['sh']] = val
+                    options.remove(options[0])
                 except ValueError:
                     print("Wrong value is given for the position "+str(k))
                     return None
@@ -211,8 +287,8 @@ class StrArgParser:
     def add_command(self, command, description, inf_positional=False, function=None):
         c = Command(command, description, inf_positional, function)
         c.add_optional_arguments('-h', '--help', 'Gives the details of the command', param_type=None)
-        c.add_optional_arguments('->', '->_route', 'Overwrite the output to the file')
-        c.add_optional_arguments('->>', '->>_route', 'Append the output to the file')
+        c.add_optional_arguments('->', '->', 'Overwrite the output to the file')
+        c.add_optional_arguments('->>', '->>', 'Append the output to the file')
         self.commands[command] = c
 
     def cmd_ls_cmd(self, res, out_func=print):
