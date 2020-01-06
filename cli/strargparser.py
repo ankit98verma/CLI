@@ -1,5 +1,5 @@
 import inspect
-
+# TODO: Comment the code
 
 class CommandNotExecuted(Exception):
 
@@ -44,6 +44,9 @@ class Command:
             string += " ..."
 
         return string
+
+    def set_function(self, function):
+        self.function = function
 
     def show_help(self, out_func=print):
         string = self.__repr__()
@@ -285,10 +288,12 @@ class StrArgParser:
         self.input_string = input_string
         self.is_loop = True
 
+        self.add_command('exit', "Close the CLI interface", function=self.exit_prog)
         if not stripped_down:
             self.default_cmd()
 
     def default_cmd(self):
+
         self.add_command('ls_cmd', 'Lists all the available command with usage', function=self.cmd_ls_cmd)
         self.get_command('ls_cmd').add_optional_arguments('-v', '--verbose', "Give the output in detail", narg=0)
 
@@ -352,6 +357,10 @@ class StrArgParser:
             print("Command not found. Use 'help' command.")
             return None, None, None, print
 
+    def exit_prog(self):
+        print("Exiting")
+        return
+
     def cmd_ls_cmd(self, res, out_func=print):
         is_verbose = '-v' in list(res.keys())
         for k, v in self.commands.items():
@@ -392,6 +401,7 @@ class StrArgParser:
             raise CommandNotExecuted('script')
 
     def run(self):
+        self.is_loop = True
         while self.is_loop:
             s = input(self.input_string).strip(' ')
             if len(s) == 0:
