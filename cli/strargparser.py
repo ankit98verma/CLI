@@ -156,7 +156,8 @@ class Command:
                 if current_key in shs:
                     bundle[current_key].append(o)
                     options_c.remove(o)
-        bundle[current_key].extend(options_c)
+        if len(options_c) > 0:
+            bundle[current_key].extend(options_c)
         return bundle
 
     def convert_type(self, vals, type):
@@ -283,6 +284,8 @@ class StrArgParser:
         self.add_command('ls_cmd', 'Lists all the available command with usage', function=self.cmd_ls_cmd)
         self.get_command('ls_cmd').add_optional_arguments('-v', '--verbose', "Give the output in detail", narg=0)
 
+        self.add_command('help', 'Gives details of all the available commands', function=self.show_help)
+
     def __repr__(self):
         return self.description
 
@@ -309,6 +312,12 @@ class StrArgParser:
             out_func("Command "+k)
             v.show_help(out_func=out_func)
             out_func("\t\t----x----\n")
+        self.close_f_tmp()
+
+    def close_f_tmp(self):
+        if self.f_tmp is not None:
+            self.f_tmp.close()
+            self.f_tmp = None
 
     def decode_command(self, s):
         s = s.strip(' ')
@@ -333,9 +342,7 @@ class StrArgParser:
                 out_func = self.write_file
             if '-h' in ls_key:
                 self.commands[s[0]].show_help(out_func=out_func)
-                if self.f_tmp is not None:
-                    self.f_tmp.close()
-                    self.f_tmp = None
+                self.close_f_tmp()
                 return None, None, None, None
 
             return s[0], res, self.commands[s[0]].function, out_func
