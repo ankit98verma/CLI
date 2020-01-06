@@ -66,7 +66,9 @@ class Command:
                 string += "\t" + v['sh'] + "\t" + str(v['type']).replace('<class ', "").replace(">", "") + "\t" + v[
                     'lf'] + "\t" + v['des'] + ". No. of values required: "+str(v['narg']) + "\n"
         if self.inf_positional:
-            string += "Infinite positional parameters\n"
+            string += "Infinite positional parameters of type %s are allowed\n" % \
+                      str(self.inf_type).replace('<class ', "").replace(">", "")
+
         out_func(string)
 
     def add_infinite_args(self, inf_type):
@@ -143,14 +145,18 @@ class Command:
         bundle = dict()
         current_key = ""
         shs = self.get_sh_list()
+        options_c = options.copy()
         for o in options:
             if '-' in o:
                 current_key = o
+                options_c.remove(current_key)
                 if current_key in shs and current_key not in list(bundle.keys()):
                     bundle[current_key] = []
             else:
                 if current_key in shs:
                     bundle[current_key].append(o)
+                    options_c.remove(o)
+        bundle[current_key].extend(options_c)
         return bundle
 
     def convert_type(self, vals, type):
@@ -194,7 +200,10 @@ class Command:
                 processing_dict = self.compulsory_arguments[k]
             else:
                 processing_dict = self.optional_arguments[k]
-            extra_arg_len = len(v) - processing_dict['narg']
+            if processing_dict['narg'] == -1:
+                extra_arg_len = 0
+            else:
+                extra_arg_len = len(v) - processing_dict['narg']
             if extra_arg_len > 0:
                 # there are either some/all positional arguments or some extra arguments are given or infinite arguments
                 if rem_pos_count > 0:
@@ -252,106 +261,13 @@ class Command:
 
         return res_bundle
 
-    def decode_argument(self, options, vals, is_compulsory=False):
-        res = dict()
-        for v in vals:
-            try:
-                pos = options.index(v['sh'])
-                if options.count(v['sh']) > 1 or options.count(v['lf']) > 0:
-                    print('Duplicate options found for ' + v['sh'])
-                    return None, None
-                remove_text = 'sh'
-            except ValueError:
-                try:
-                    pos = options.index(v['lf'])
-                    if options.count(v['lf']) > 1 or options.count(v['sh']) > 0:
-                        print('Duplicate options found' + v['sh'])
-                        return None, None
-                    remove_text = 'lf'
-                except ValueError:
-                    if is_compulsory:
-                        print(v['sh'] + " or " + v['lf'] + " not present in the options")
-                        return None, None
-                    else:
-                        continue
-            if v['type'] is None:
-                res[v['sh']] = None
-                options.remove(v[remove_text])
-                continue
-            try:
-                if options[pos + 1][0] == '-':
-                    raise IndexError
-                else:
-                    if v['type'] == bool:
-                        if options[pos + 1] == 'true':
-                            val = True
-                        elif options[pos + 1] == 'false':
-                            val = False
-                        else:
-                            raise ValueError
-                    else:
-                        val = v['type'](options[pos + 1])
-                    res[v['sh']] = val
-                    options.remove(v[remove_text])
-                    options.remove(options[pos])
-            except IndexError:
-                print("No value is given for option " + v['sh'])
-                return None, None
-            except ValueError:
-                print("Wrong value is given for option " + v['sh'])
-                return None, None
-        return res, options
-
     def decode_options(self, options):
 
         options = self.standardize(options)
         bundle = self.bundle_data(options.copy())
         proc = self.process_bundle(bundle)
-        print(proc)
 
-        res, options = self.decode_argument(options, self.optional_arguments.values())
-        if res is None:
-            return None
-
-        if '-h' in list(res.keys()):
-            return res
-
-        res_comp, options = self.decode_argument(options, self.compulsory_arguments.values(), is_compulsory=True)
-        if res_comp is None:
-            return None
-        res.update(res_comp)
-
-        if self.has_positional:
-            if len(options) < len(self.positional_arguments):
-                print("All positional arguments are not found")
-                return None
-
-            for k, v in self.positional_arguments.items():
-                try:
-                    if v['type'] == bool:
-                        if options[0] == 'true':
-                            val = True
-                        elif options[0] == 'false':
-                            val = False
-                        else:
-                            raise ValueError
-                    else:
-                        val = v['type'](options[0])
-                    res[v['sh']] = val
-                    options.remove(options[0])
-                except ValueError:
-                    print("Wrong value is given for the position "+str(k))
-                    return None
-
-        if self.inf_positional:
-            i = 1
-            for v in options:
-                res['inf'+str(i)] = v
-                i += 1
-        else:
-            if len(options) > 1:
-                print("some arguments, not required, have been ignored")
-        return res
+        return proc
 
 
 class StrArgParser:
@@ -365,8 +281,7 @@ class StrArgParser:
         self.description = description
 
         self.add_command('ls_cmd', 'Lists all the available command with usage', function=self.cmd_ls_cmd)
-        self.get_command('ls_cmd').add_optional_arguments('-v', '--verbose', "Give the output in detail",
-                                                          param_type=None)
+        self.get_command('ls_cmd').add_optional_arguments('-v', '--verbose', "Give the output in detail", narg=0)
 
     def __repr__(self):
         return self.description
@@ -376,7 +291,7 @@ class StrArgParser:
 
     def add_command(self, command, description, inf_positional=False, function=None):
         c = Command(command, description, inf_positional, function)
-        c.add_optional_arguments('-h', '--help', 'Gives the details of the command', narg=0, param_type=None)
+        c.add_optional_arguments('-h', '--help', 'Gives the details of the command', narg=0)
         c.add_optional_arguments('->', '->', 'Overwrite the output to the file')
         c.add_optional_arguments('->>', '->>', 'Append the output to the file')
         self.commands[command] = c
@@ -410,11 +325,11 @@ class StrArgParser:
             if res is None:
                 return None, None, None, print
             ls_key = list(res.keys())
-            if '->' in ls_key or '->>' in ls_key:
-                if '->' in ls_key:
-                    self.f_tmp = open(res['->'], 'w')
-                else:
-                    self.f_tmp = open(res['->>'], 'a')
+            if '->' in ls_key:
+                self.f_tmp = open(res['->'][0], 'w')
+                out_func = self.write_file
+            elif '->>' in ls_key:
+                self.f_tmp = open(res['->>'][0], 'a')
                 out_func = self.write_file
             if '-h' in ls_key:
                 self.commands[s[0]].show_help(out_func=out_func)
@@ -425,5 +340,5 @@ class StrArgParser:
 
             return s[0], res, self.commands[s[0]].function, out_func
         except KeyError:
-            print("Command not found. Use help command for details on various commands")
+            print("Command not found. Use 'help' command.")
             return None, None, None, print
