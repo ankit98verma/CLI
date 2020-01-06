@@ -1,3 +1,0 @@
-[console_scripts]
-dds = test.test1:main
-

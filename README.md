@@ -23,7 +23,7 @@ OR
 ~~~
 python3 setup.py sdist
 ~~~
-4. Go to the folder newly created folder "dist" and run following command
+4. Go to the newly created folder "dist" and run following command
 ~~~
 pip install CLI-1.0.0.tar.gz
 ~~~ 
