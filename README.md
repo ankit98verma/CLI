@@ -25,14 +25,14 @@ python3 setup.py sdist
 ~~~
 4. Go to the newly created folder "dist" and run following command
 ~~~
-pip install CLI-1.0.0.tar.gz
+pip install CLI-x.x.x.tar.gz
 ~~~ 
 OR
 ~~~
-pip3 install CLI-1.0.0.tar.gz 
+pip3 install CLI-x.x.x.tar.gz 
 ~~~
 
-The package is installed, see the "Usage" section for some examples on setup.
+The package is installed, see the "Usage" section for some examples.
 
 ## Usage
 

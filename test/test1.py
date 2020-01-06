@@ -2,8 +2,8 @@ from cli import strargparser as argp
 import inspect
 
 
-def exit_prog():
-    print("exiting")
+def exit_prog(out_func):
+    out_func("exiting")
 
 
 def c1(res):
@@ -45,15 +45,15 @@ if __name__ == '__main__':
     par.get_command('c1').add_positional_arguments('Second pos arg', param_type=float)
 
     par.add_command('exit', "Close the CLI interface", function=exit_prog)
-
-    input_string = ">>"
-    loop = True
-    while loop:
-        s = input(input_string).strip(' ')
-        if len(s) == 0:
-            continue
-        try:
-            loop = exec_cmd(s, par)
-        except argp.CommandNotExecuted as e:
-            print(e)
+    par.run()
+    # input_string = ">>"
+    # loop = True
+    # while loop:
+    #     s = input(input_string).strip(' ')
+    #     if len(s) == 0:
+    #         continue
+    #     try:
+    #         loop = exec_cmd(s, par)
+    #     except argp.CommandNotExecuted as e:
+    #         print(e)
 
