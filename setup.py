@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='CLI',
-    version='1.0.2',
+    version='1.0.3',
     packages=find_packages(exclude=['test', 'cli2_7']),
     url='https://github.com/ankit98verma/CLI',
     author='Ankit Verma',
