@@ -67,7 +67,6 @@ parser.run()
 ```
 OR (for python2.7)
 
-So overall program is as follows:
 ```python
 from cli2_7 import strargparser as argp
 
