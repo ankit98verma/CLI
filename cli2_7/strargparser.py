@@ -1,11 +1,13 @@
-import inspect
+from __future__ import print_function
+import copy
+import funcsigs
 # TODO: Comment the code
 
 
 class CommandNotExecuted(Exception):
 
     def __init__(self, cmd_name):
-        super().__init__(cmd_name + " not executed")
+        super(CommandNotExecuted, self).__init__(cmd_name + " not executed")
         self.cmd_name = cmd_name
 
     def __repr__(self):
@@ -138,7 +140,7 @@ class Command:
         shs = self.get_sh_list()
         lfs = self.get_lf_list()
 
-        options2 = options.copy()
+        options2 = copy.copy(options)
         i = 0
         for o in options:
             if o in lfs:
@@ -151,7 +153,7 @@ class Command:
         bundle = dict()
         current_key = ""
         shs = self.get_sh_list()
-        options_c = options.copy()
+        options_c = copy.copy(options)
         for o in options:
             if '-' in o:
                 current_key = o
@@ -182,7 +184,7 @@ class Command:
         return res
 
     def process_bundle(self, bundle):
-        res_bundle = bundle.copy()
+        res_bundle = copy.copy(bundle)
         pos_str = 'pos'
         inf_str = 'inf'
         res_bundle[pos_str] = []
@@ -241,7 +243,7 @@ class Command:
                 print("\nLess number of values are given for %s" % k)
                 return None
             try:
-                res_bundle[k] = self.convert_type(res_bundle[k].copy(), processing_dict['type'])
+                res_bundle[k] = self.convert_type(copy.copy(res_bundle[k]), processing_dict['type'])
             except ValueError:
                 print("Wrong value is given for argument %s" % k)
                 return None
@@ -261,7 +263,7 @@ class Command:
         res_bundle[pos_str] = res_list
 
         try:
-            res_bundle[inf_str] = self.convert_type(res_bundle[inf_str].copy(), self.inf_type)
+            res_bundle[inf_str] = self.convert_type(copy.copy(res_bundle[inf_str]), self.inf_type)
         except ValueError:
             print("Wrong value is given for infinite arguments")
             return None
@@ -271,7 +273,7 @@ class Command:
     def decode_options(self, options):
 
         options = self.standardize(options)
-        bundle = self.bundle_data(options.copy())
+        bundle = self.bundle_data(copy.copy(options))
         proc = self.process_bundle(bundle)
 
         return proc
@@ -365,7 +367,7 @@ class StrArgParser:
     def cmd_ls_cmd(self, res, out_func=print):
         is_verbose = '-v' in list(res.keys())
         for k, v in self.commands.items():
-            out_func("Command: " + k),
+            out_func("Command: " + k)
             if is_verbose:
                 out_func(v)
                 out_func("\n" + v.description + "\n\n\t\t---x---\n")
@@ -394,7 +396,7 @@ class StrArgParser:
                             break
                     if not self.is_loop:
                         break
-        except FileNotFoundError:
+        except EnvironmentError:
             out_func('The file not found')
             raise CommandNotExecuted('script')
         except UnicodeDecodeError:
@@ -404,7 +406,7 @@ class StrArgParser:
     def run(self):
         self.is_loop = True
         while self.is_loop:
-            s = input(self.input_string).strip(' ')
+            s = raw_input(self.input_string)
             if len(s) == 0:
                 continue
             try:
@@ -416,7 +418,7 @@ class StrArgParser:
         (cmd, res, func, out_func) = self.decode_command(s)
         if res is None:
             return True
-        param_list = list(inspect.signature(func).parameters.keys())
+        param_list = list(funcsigs.signature(func).parameters.keys())
         if 'res' in param_list and 'out_func' in param_list:
             func(res, out_func=out_func)
         elif 'res' in param_list:

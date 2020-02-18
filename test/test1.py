@@ -1,5 +1,4 @@
-from cli import strargparser as argp
-import inspect
+from cli2_7 import strargparser as argp
 
 
 def exit_prog(out_func):
@@ -25,10 +24,12 @@ if __name__ == '__main__':
     par.get_command('c1').add_positional_arguments('First pos arg', param_type=int)
     par.get_command('c1').add_positional_arguments('Second pos arg', param_type=float)
 
-    par.get_command('exit').set_function(exit_prog)
+
+    par.run()
+
+    # par.get_command('exit').set_function(exit_prog)
 
     par.add_command('exit', "Close the CLI interface", function=exit_prog)
-    par.run()
     # input_string = ">>"
     # loop = True
     # while loop:
