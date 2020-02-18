@@ -65,6 +65,15 @@ from cli import strargparser as argp
 parser = argp.StrArgParser(description="Parser 1")
 parser.run()
 ```
+OR (for python2.7)
+
+So overall program is as follows:
+```python
+from cli2_7 import strargparser as argp
+
+parser = argp.StrArgParser(description="Parser 1")
+parser.run()
+```
 Running the above program will lead to following console:
 ~~~
 >>
