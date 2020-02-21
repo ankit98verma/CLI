@@ -44,6 +44,11 @@ First import the package
 ```python
 from cli import strargparser as argp
 ```
+If you are using python2.7 then import the following package.
+```python
+from cli2_7 import strargparser as argp
+```
+
 Let us make an instance of parser. This parser have a description "Parser 1"
 ```python
 parser = argp.StrArgParser(description="Parser 1")
@@ -56,6 +61,14 @@ parser.run()
 So overall program is as follows:
 ```python
 from cli import strargparser as argp
+
+parser = argp.StrArgParser(description="Parser 1")
+parser.run()
+```
+OR (for python2.7)
+
+```python
+from cli2_7 import strargparser as argp
 
 parser = argp.StrArgParser(description="Parser 1")
 parser.run()
