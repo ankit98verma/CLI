@@ -154,8 +154,14 @@ class Command:
         current_key = ""
         shs = self.get_sh_list()
         options_c = copy.copy(options)
+
         for o in options:
-            if '-' in o:
+            try:
+                tmp = float(o)
+                isNum = True
+            except:
+                isNum = False
+            if '-' in o and not isNum:
                 current_key = o
                 options_c.remove(current_key)
                 if current_key in shs and current_key not in list(bundle.keys()):
