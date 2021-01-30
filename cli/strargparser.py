@@ -15,21 +15,46 @@ class CommandNotExecuted(Exception):
 class WrongArgTpe(Exception):
 
     def __init__(self, wrong_arg_type, correct_arg_type):
-        super().__init__()
-        self.msg = 'Cannot set the argument attributes. Correct argument type is: %s. Attributes set for: %s' % \
-                   (correct_arg_type, wrong_arg_type)
-
-    def __repr__(self):
-        return self.msg
+        super().__init__('WrongArgTpe Exception:Cannot set the argument attributes. Correct argument type is: %s. '
+                         'Attributes set for: %s' % (correct_arg_type, wrong_arg_type))
 
 
-class Arguments:
+class AbsentArg(Exception):
 
-    ARG_TYPE = {'POS': 0, 'INF': 1, 'COM': 2, 'OPT': 3}
+    def __init__(self, absent_arg):
+        super().__init__('AbsentArg Exception: Following argument is missing: \n\t%s' % str(absent_arg))
 
-    DATA_TYPES = [int, bool, float, str]
+
+class InsufficientPosArgs(Exception):
+
+    def __init__(self, req_arg_nos, provided_arg_nos):
+        super().__init__('InsufficientPosArgs Exception: Insufficient number of positional arguments: Required: %d. '
+                         'Provided %d' % (req_arg_nos, provided_arg_nos))
+
+
+class InsufficientNargs(Exception):
+
+    def __init__(self, arg, provided_val):
+        super().__init__('InsufficientNargs Exception: Number of values for the argument with short form %s required '
+                         'is: %d but provided %d values' % (str(arg.sh), arg.narg, provided_val))
+
+
+class Arguments(dict):
+
+    ARG_TYPES = {'POS': 0, 'INF': 1, 'COM': 2, 'OPT': 3}
+    SH_INFO_TYPE = 'sh'
+    LF_INFO_TYPE = 'lf'
+    DES_INFO_TYPE = 'des'
+    DT_INFO_TYPE = 'data_type'
+    NARG_INFO_TYPE = 'narg'
+
+    INT_DATA_TYPE = int
+    BOOL_DATA_TYPE = bool
+    FLOAT_DATA_TYPE = float
+    STR_DATA_TYPE = str
 
     def __init__(self, arg_type):
+        super().__init__()
         self.arg_type = arg_type
         self.sh = None
         self.lf = None
@@ -38,17 +63,17 @@ class Arguments:
         self.narg = None
 
     def set_compulsory_attr(self, short_form, long_form, description, param_type, narg):
-        if self.arg_type != Arguments.ARG_TYPE['COM']:
+        if self.arg_type != Arguments.ARG_TYPES['COM']:
             raise WrongArgTpe
         self._set_attrs(short_form, long_form, description, param_type, narg)
 
     def set_optional_attr(self, short_form, long_form, description, param_type, narg):
-        if self.arg_type != Arguments.ARG_TYPE['OPT']:
+        if self.arg_type != Arguments.ARG_TYPES['OPT']:
             raise WrongArgTpe
         self._set_attrs(short_form, long_form, description, param_type, narg)
 
     def set_positional_attr(self, position, description, param_type):
-        if self.arg_type != Arguments.ARG_TYPE['POS']:
+        if self.arg_type != Arguments.ARG_TYPES['POS']:
             raise WrongArgTpe
         short_form = str(position)
         long_form = short_form
@@ -57,7 +82,7 @@ class Arguments:
         self._set_attrs(short_form, long_form, description, param_type, narg)
 
     def set_infinity_attr(self, description, param_type):
-        if self.arg_type != Arguments.ARG_TYPE['INF']:
+        if self.arg_type != Arguments.ARG_TYPES['INF']:
             raise WrongArgTpe
 
         short_form = 'inf'
@@ -65,6 +90,25 @@ class Arguments:
         narg = -1
 
         self._set_attrs(short_form, long_form, description, param_type, narg)
+
+    def process_args(self, options):
+        # convert to correct data type
+        res = dict()
+        res[self.sh] = []
+        vals = options
+        if self.data_type == bool:
+            for v in vals:
+                if v == 'true':
+                    res[self.sh].append(True)
+                elif v == 'false':
+                    res[self.sh].append(False)
+                else:
+                    raise ValueError
+        else:
+            for v in vals:
+                res[self.sh].append(self.data_type(v))
+
+        return res
 
     def _set_attrs(self, short_form, long_form, description, param_type, narg):
         self.sh = short_form
@@ -74,33 +118,257 @@ class Arguments:
         self.narg = narg
 
     def __repr__(self):
-        # todo
-        pass
+        string = ''
+        string += self.sh + "\t" + str(self.data_type).replace('<class ', "").replace(">", "") + "\t" + self.lf + "\t" \
+                  + self.des + ". No. of values required: " + str(self.narg) + "\n"
+        return string
+
+    def __getattr__(self, name):
+        if name in self:
+            return self[name]
+        else:
+            raise AttributeError("No such attribute: " + name)
+
+    def __setattr__(self, name, value):
+        self[name] = value
 
 
 class ArgumentManager:
 
     def __init__(self):
-        pass
 
-    def add_compulsory_argument(self):
-        pass
+        self.pos_args = []
+        self.inf_args = []
+        self.com_args = []
+        self.opt_args = []
 
-    def add_optional_argument(self):
-        pass
+    def add_comp_arg(self, short_form, long_form, description, param_type=str, narg=1):
+        arg = Arguments(Arguments.ARG_TYPES['COM'])
+        arg.set_compulsory_attr(short_form, long_form, description, param_type, narg)
+        self.com_args.append(arg)
 
-    def add_infinity_argument(self):
-        pass
+    def add_opt_arg(self, short_form, long_form, description, param_type=str, narg=1):
+        arg = Arguments(Arguments.ARG_TYPES['OPT'])
+        arg.set_optional_attr(short_form, long_form, description, param_type, narg)
+        self.opt_args.append(arg)
 
-    def add_positional_argument(self):
-        pass
+    def add_inf_arg(self, description, param_type):
+        if len(self.inf_args):
+            print("Cannot add more than one infinity vars")
+            return
 
-    def get_list(self):
-        pass
+        arg = Arguments(Arguments.ARG_TYPES['INF'])
+        arg.set_infinity_attr(description, param_type)
+        self.inf_args.append(arg)
+
+    def add_pos_arg(self, description, param_type):
+        arg = Arguments(Arguments.ARG_TYPES['POS'])
+        arg.set_positional_attr(len(self.pos_args)+1, description, param_type)
+        self.pos_args.append(arg)
+
+    def has_comp_args(self):
+        return ArgumentManager._are_args(self.com_args)
+
+    def has_opt_args(self):
+        return ArgumentManager._are_args(self.opt_args)
+
+    def has_inf_args(self):
+        return ArgumentManager._are_args(self.inf_args)
+
+    def has_pos_args(self):
+        return ArgumentManager._are_args(self.pos_args)
+
+    def get_comp_list(self, info_type):
+        return ArgumentManager._get_list(self.com_args, info_type)
+
+    def get_opt_list(self, info_type):
+        return ArgumentManager._get_list(self.opt_args, info_type)
+
+    def get_inf_list(self, info_type):
+        return ArgumentManager._get_list(self.inf_args, info_type)
+
+    def get_pos_list(self, info_type):
+        return ArgumentManager._get_list(self.pos_args, info_type)
+
+    def get_desc(self):
+        string = ''
+        if self.has_pos_args():
+            string += "positional arguments (all compulsory):\n"
+            for v in self.pos_args:
+                string += "\t" + str(v)
+
+        string += '\n'
+
+        if self.has_comp_args():
+            string += "compulsory arguments:\n"
+            for v in self.com_args:
+                string += "\t" + str(v)
+
+        string += '\n'
+
+        if self.has_opt_args():
+            string += "optional arguments:\n"
+            for v in self.opt_args:
+                string += "\t" + str(v) + " "
+
+        string += '\n'
+
+        if self.has_inf_args():
+            string += "infinite positional:\n"
+            for v in self.inf_args:
+                string += "\tType %s\n" % \
+                          str(v.data_type).replace('<class ', "").replace(">", "")
+            string += "\tare allowed"
+        string += '\n'
+
+        return string
+
+    def standardize_args(self, options):
+        # if -h is in the option then ignore all other arguments
+
+        if '-h' in options:
+            standard_args = ['-h']
+            return standard_args
+
+        standard_args = options.copy()
+
+        if self.has_comp_args():
+            # the compulsory arguments are present
+            shs = self.get_comp_list(Arguments.SH_INFO_TYPE)
+            lfs = self.get_comp_list(Arguments.LF_INFO_TYPE)
+            # go through each element in the options and convert to sh if need be
+            for i, e in enumerate(options):
+                if e in lfs:
+                    standard_args[i] = shs[lfs.index(e)]
+            # All the compulsory options have been their short term forms
+
+        if self.has_opt_args():
+            # the compulsory arguments are present
+            shs = self.get_opt_list(Arguments.SH_INFO_TYPE)
+            lfs = self.get_opt_list(Arguments.LF_INFO_TYPE)
+            # go through each element in the options and convert to sh if need be
+            for i, e in enumerate(options):
+                if e in lfs:
+                    standard_args[i] = shs[lfs.index(e)]
+            # All the optional options have been their short term forms
+
+        return standard_args
+
+    def build_bundle(self, std_opts):
+        # bundle up the compulsory args
+
+        res = dict()
+        # ake care of compulsory arguments
+        std_opts, res_tmp = self._bundle_comp_opt_args(std_opts, Arguments.ARG_TYPES['COM'])
+        res.update(res_tmp)
+
+        # now take care of optional arguments
+        std_opts, res_tmp = self._bundle_comp_opt_args(std_opts, Arguments.ARG_TYPES['OPT'])
+        res.update(res_tmp)
+
+        # now take care of positional arguments
+        std_opts, res_tmp = self._bundle_pos_args(std_opts)
+        res.update(res_tmp)
+
+        std_opts, res_tmp = self._bundle_inf_args(std_opts)
+        res.update(res_tmp)
+
+        return res
+
+    def _bundle_comp_opt_args(self, std_opts, arg_type):
+        shs = self.get_comp_list(Arguments.SH_INFO_TYPE)
+        shs.extend(self.get_opt_list(Arguments.SH_INFO_TYPE))
+
+        res = dict()
+        if arg_type == Arguments.ARG_TYPES['COM']:
+            arg_arr = self.com_args
+            cond = self.has_comp_args()
+        else:
+            arg_arr = self.opt_args
+            cond = self.has_opt_args()
+
+        if cond:
+            # go through each argument
+            for a in arg_arr:
+                if a.sh not in std_opts:
+                    # missing a compulsory argument
+                    if arg_type == Arguments.ARG_TYPES['COM']:
+                        raise AbsentArg(a)
+                    else:
+                        continue
+                op_ind = std_opts.index(a.sh)
+
+                if (len(std_opts) - op_ind - 1) < a.narg:
+                    raise InsufficientNargs(a, len(std_opts) - op_ind - 1)
+
+                arg_vals = std_opts[op_ind+1:op_ind + a.narg + 1]
+
+                # check that the arg_vals don't contain any other args indicator (comp or optional)
+                other_args_ind = sum([a in shs for a in arg_vals])
+                if other_args_ind > 0:
+                    raise InsufficientNargs(a, a.narg - other_args_ind)
+                res.update(a.process_args(arg_vals))
+                # now remove the data from the std_opts
+                del(std_opts[op_ind:op_ind+a.narg+1])
+
+        return std_opts, res
+
+    def _bundle_pos_args(self, std_opts):
+        res = dict()
+        if self.has_pos_args():
+            if len(std_opts) < len(self.pos_args):
+                raise InsufficientPosArgs(len(self.pos_args), len(std_opts))
+            # we have sufficient number for arguments for positional arguments
+
+            for p in self.pos_args:
+                # go through each positional argument and get the results
+                res.update(p.process_args(std_opts[0:p.narg]))
+
+                del(std_opts[0:p.narg])
+        return std_opts, res
+
+    def _bundle_inf_args(self, std_opts):
+        res = dict()
+        if self.has_inf_args():
+            p = self.inf_args[0]
+
+            res.update(p.process_args(std_opts[0:]))
+
+            for i in std_opts[0:p.narg]:
+                std_opts.remove(i)
+
+        return std_opts, res
+
+    @staticmethod
+    def _are_args(arg_list):
+        return len(arg_list) > 0
+
+    @staticmethod
+    def _get_list(arg_list, info_type):
+        arg_l = []
+        for a in arg_list:
+            arg_l.append(a[info_type])
+        return arg_l
 
     def __repr__(self):
-        # todo
-        pass
+        string = ''
+        if self.has_opt_args():
+            for v in self.opt_args:
+                string += " [" + v.sh + "]"
+
+        if self.has_comp_args():
+            for v in self.com_args:
+                string += " " + v.sh
+
+        if self.has_pos_args():
+            for v in self.pos_args:
+                string += " " + v.sh
+
+        if self.has_inf_args():
+            for v in self.inf_args:
+                string += " " + v.des + "..."
+
+        return string
 
 
 class Command:
@@ -108,9 +376,8 @@ class Command:
     def __init__(self, command_name, description, inf_positional, function):
         self.description = description
         self.command_name = command_name
-        self.positional_arguments = dict()
-        self.compulsory_arguments = dict()
-        self.optional_arguments = dict()
+        self._arg_manager = ArgumentManager()
+
         self.function = function
 
         self.inf_positional = inf_positional
@@ -121,19 +388,7 @@ class Command:
 
     def __repr__(self):
         string = "usage: " + self.command_name
-        if self.has_optional:
-            for v in self.optional_arguments.values():
-                string += " [" + v['sh'] + "]"
-
-        if self.has_compulsory:
-            for v in self.compulsory_arguments.values():
-                string += " " + v['sh']
-
-        if self.has_positional:
-            for v in self.positional_arguments.values():
-                string += " " + v['sh']
-        if self.inf_positional:
-            string += " ..."
+        string += str(self._arg_manager)
 
         return string
 
@@ -145,233 +400,35 @@ class Command:
         string += "\n\n"
         string += self.description + "\n"
         string += "\n"
-        if self.has_positional:
-            string += "positional arguments (all compulsory):\n"
-            for v in self.positional_arguments.values():
-                string += "\t" + v['sh'] + "\t" + str(v['type']).replace('<class ', "").replace(">", "") + "\t" + v[
-                    'lf'] + "\t" + v['des'] + "\n"
-
-        if self.has_compulsory:
-            string += "compulsory arguments with options:\n"
-            for v in self.compulsory_arguments.values():
-                string += "\t" + v['sh'] + "\t" + str(v['type']).replace('<class ', "").replace(">", "") + "\t" + v[
-                    'lf'] + "\t" + v['des'] + ". No. of values required: " + str(v['narg']) + "\n"
-
-        if self.has_optional:
-            string += "optional arguments with options:\n"
-            for v in self.optional_arguments.values():
-                string += "\t" + v['sh'] + "\t" + str(v['type']).replace('<class ', "").replace(">", "") + "\t" + v[
-                    'lf'] + "\t" + v['des'] + ". No. of values required: " + str(v['narg']) + "\n"
-        if self.inf_positional:
-            string += "Infinite positional parameters of type %s are allowed\n" % \
-                      str(self.inf_type).replace('<class ', "").replace(">", "")
-
+        string += self._arg_manager.get_desc()
         out_func(string)
 
-    def add_infinite_args(self, inf_type=str):
-        self.inf_positional = True
-        self.inf_type = inf_type
+    def add_infinite_arg(self, description, param_type=str):
+        self._arg_manager.add_inf_arg(description, param_type)
 
-    def remove_infinite_args(self):
-        self.inf_positional = False
-        self.inf_type = None
+    def add_positional_argument(self, description, param_type=str):
+        self._arg_manager.add_pos_arg(description, param_type)
 
-    def add_positional_arguments(self, description, param_type=str):
-        self.has_positional = True
-        position = len(self.positional_arguments.keys()) + 1
-        short_form = str(position)
-        long_form = short_form
-        narg = 1
-        self.positional_arguments[position] = dict()
-        self.positional_arguments[position]['sh'] = short_form
-        self.positional_arguments[position]['lf'] = long_form
-        self.positional_arguments[position]['des'] = description
-        self.positional_arguments[position]['type'] = param_type
-        self.positional_arguments[position]['narg'] = narg
+    def add_optional_argument(self, short_form, long_form, description, narg=1, param_type=str):
+        self._arg_manager.add_opt_arg(short_form, long_form, description, param_type, narg)
 
-    def add_optional_arguments(self, short_form, long_form, description, narg=1, param_type=str):
-        self.has_optional = True
-        self.optional_arguments[short_form] = dict()
-        self.optional_arguments[short_form]['sh'] = short_form
-        self.optional_arguments[short_form]['lf'] = long_form
-        self.optional_arguments[short_form]['des'] = description
-        self.optional_arguments[short_form]['type'] = param_type
-        self.optional_arguments[short_form]['narg'] = narg
-
-    def add_compulsory_arguments(self, short_form, long_form, description, narg=1, param_type=str):
-        self.has_compulsory = True
-        self.compulsory_arguments[short_form] = dict()
-        self.compulsory_arguments[short_form]['sh'] = short_form
-        self.compulsory_arguments[short_form]['lf'] = long_form
-        self.compulsory_arguments[short_form]['des'] = description
-        self.compulsory_arguments[short_form]['type'] = param_type
-        self.compulsory_arguments[short_form]['narg'] = narg
-
-    def get_sh_list(self):
-        com_sh = list(self.compulsory_arguments.keys())
-        opt_sh = list(self.optional_arguments.keys())
-        com_sh.extend(opt_sh)
-        return com_sh
-
-    def get_lf_list(self):
-        com_vals = list(self.compulsory_arguments.values())
-        com_lf = []
-        for i in com_vals:
-            com_lf.append(i['lf'])
-        opt_vals = list(self.optional_arguments.values())
-        opt_lf = []
-        for i in opt_vals:
-            opt_lf.append(i['lf'])
-        com_lf.extend(opt_lf)
-        return com_lf
-
-    def standardize(self, options):
-        # convert the LFs (if any) to Shs
-        shs = self.get_sh_list()
-        lfs = self.get_lf_list()
-
-        standard_options = options.copy()
-        for i, o in enumerate(options):
-            if o in lfs:
-                standard_options[i] = shs[lfs.index(o)]
-
-        # separate out the positional and the optional arguments
-
-        return standard_options
-
-    def bundle_data(self, options):
-        bundle = dict()
-        current_key = ""
-        shs = self.get_sh_list()
-        options_c = options.copy()
-        for o in options:
-            try:
-                tmp = float(o)
-                isNum = True
-            except:
-                isNum = False
-            if '-' in o and not isNum:
-                current_key = o
-                options_c.remove(current_key)
-                if current_key in shs and current_key not in list(bundle.keys()):
-                    bundle[current_key] = []
-            else:
-                if current_key in shs:
-                    bundle[current_key].append(o)
-                    options_c.remove(o)
-        if len(options_c) > 0:
-            bundle[current_key].extend(options_c)
-        return bundle
-
-    def convert_type(self, vals, type):
-        res = []
-        if type == bool:
-            for v in vals:
-                if v == 'true':
-                    res.append(True)
-                elif v == 'false':
-                    res.append(False)
-                else:
-                    raise ValueError
-        else:
-            for v in vals:
-                res.append(type(v))
-        return res
-
-    def process_bundle(self, bundle):
-        res_bundle = bundle.copy()
-        pos_str = 'pos'
-        inf_str = 'inf'
-        res_bundle[pos_str] = []
-        res_bundle[inf_str] = []
-        got_args = list(bundle.keys())
-
-        # first check if -h is in arguments
-        if '-h' in got_args:
-            return bundle
-        # now check if all the compulsory arguments are present
-        com_shs = list(self.compulsory_arguments.keys())
-        res = all(ele in got_args for ele in com_shs)
-        if not res:
-            print("All compulsory arguments are not present")
-            return None
-
-        # now we got all the compulsory arguments, along with optional, and/or positional arguments and/or infinite args
-        # positional and infinite arguments (if present) are mixed up in the compulsory and optional arguments
-        rem_pos_count = len(self.positional_arguments.keys())
-        for k, v in bundle.items():
-            if k in com_shs:
-                processing_dict = self.compulsory_arguments[k]
-            else:
-                processing_dict = self.optional_arguments[k]
-            if processing_dict['narg'] == -1:
-                extra_arg_len = 0
-            else:
-                extra_arg_len = len(v) - processing_dict['narg']
-            if extra_arg_len > 0:
-                # there are either some/all positional arguments or some extra arguments are given or infinite arguments
-                if rem_pos_count > 0:
-                    # there are some positional arguments
-                    res_bundle[k] = v[:processing_dict['narg']]
-                    if rem_pos_count - extra_arg_len >= 0:
-                        rem_pos_count -= extra_arg_len
-                        res_bundle[pos_str].extend(v[processing_dict['narg']:])
-                    elif self.inf_positional:
-                        res_bundle[pos_str].extend(v[processing_dict['narg']:][:rem_pos_count])
-                        res_bundle[inf_str].extend(v[processing_dict['narg']:][rem_pos_count:])
-                        rem_pos_count = 0
-                    else:
-                        print("More than required no. of values are given for argument: %s" % k)
-                        return None
-                else:
-                    if self.inf_positional:
-                        # there are some infinite arguments
-                        res_bundle[k] = v[:processing_dict['narg']]
-                        res_bundle[inf_str].extend(v[processing_dict['narg']:])
-                        continue
-                    else:
-                        print("More than required no. of values are given for argument: %s" % k)
-                        return None
-            elif extra_arg_len < 0:
-                print("For argument: %s. \n\tRequired no. of value is: %d  \n\tGiven number of value is: %s"
-                      % (k, processing_dict['narg'], len(v)))
-                print("\nLess number of values are given for %s" % k)
-                return None
-            try:
-                res_bundle[k] = self.convert_type(res_bundle[k].copy(), processing_dict['type'])
-            except ValueError:
-                print("Wrong value is given for argument %s" % k)
-                return None
-
-        if rem_pos_count > 0:
-            print("All positional arguments are not found")
-            return None
-        ii = 1
-        res_list = []
-        for v in res_bundle[pos_str]:
-            try:
-                res_list.extend(self.convert_type([v], self.positional_arguments[ii]['type']))
-            except ValueError:
-                print("Wrong value is given for argument %s" % v)
-                return None
-            ii += 1
-        res_bundle[pos_str] = res_list
-
-        try:
-            res_bundle[inf_str] = self.convert_type(res_bundle[inf_str].copy(), self.inf_type)
-        except ValueError:
-            print("Wrong value is given for infinite arguments")
-            return None
-
-        return res_bundle
+    def add_compulsory_argument(self, short_form, long_form, description, narg=1, param_type=str):
+        self._arg_manager.add_comp_arg(short_form, long_form, description, param_type, narg)
 
     def decode_options(self, options):
 
-        options = self.standardize(options)
-        bundle = self.bundle_data(options.copy())
-        proc = self.process_bundle(bundle)
+        std_options = self._arg_manager.standardize_args(options)
+        # hand the Absent argument error here
+        try:
+            bundle = self._arg_manager.build_bundle(std_options)
+        except InsufficientNargs as e:
+            print(e)
+        except AbsentArg as e:
+            print(e)
 
-        return proc
+        # proc = self.process_bundle(bundle)
+
+        return bundle
 
 
 class StrArgParser:
@@ -393,13 +450,13 @@ class StrArgParser:
     def default_cmd(self):
 
         self.add_command('ls_cmd', 'Lists all the available command with usage', function=self.cmd_ls_cmd)
-        self.get_command('ls_cmd').add_optional_arguments('-v', '--verbose', "Give the output in detail", narg=0)
+        self.get_command('ls_cmd').add_optional_argument('-v', '--verbose', "Give the output in detail", narg=0)
 
         self.add_command('help', 'Gives details of all the available commands', function=self.show_help)
         self.add_command('script', "Runs the script.", function=self.cmd_start_script)
-        self.get_command('script').add_compulsory_arguments('-f', '--file_name',
+        self.get_command('script').add_compulsory_argument('-f', '--file_name',
                                                                   "The script file which is to be executed", )
-        self.get_command('script').add_optional_arguments('-v', '--verbose',
+        self.get_command('script').add_optional_argument('-v', '--verbose',
                                                                 'Prints out the commands being executed from '
                                                                 'the script', narg=0)
 
@@ -411,9 +468,9 @@ class StrArgParser:
 
     def add_command(self, command, description, inf_positional=False, function=None):
         c = Command(command, description, inf_positional, function)
-        c.add_optional_arguments('-h', '--help', 'Gives the details of the command', narg=0)
-        c.add_optional_arguments('->', '->', 'Overwrite the output to the file')
-        c.add_optional_arguments('->>', '->>', 'Append the output to the file')
+        c.add_optional_argument('-h', '--help', 'Gives the details of the command', narg=0)
+        c.add_optional_argument('->', '->', 'Overwrite the output to the file')
+        c.add_optional_argument('->>', '->>', 'Append the output to the file')
         self.commands[command] = c
 
     def close_f_tmp(self):
@@ -437,12 +494,12 @@ class StrArgParser:
                 return None, None, None, print
 
             ls_key = list(res.keys())
-            c = '-'
+            c = None
             if '->' in ls_key:
                 c = '->w'
             elif '->>' in ls_key:
                 c = '->>a'
-            if c != '-':
+            if c is not None:
                 self.f_tmp = open(res[c[:-1]][0], c[-1])
                 out_func = self.write_file
             if '-h' in ls_key:
@@ -470,7 +527,7 @@ class StrArgParser:
     def show_help(self, out_func=print):
         for k, v in self.commands.items():
             out_func("Command " + k)
-            v.show_help(out_func=out_func)
+            v.get_desc(out_func=out_func)
             out_func("\t\t----x----\n")
         self.close_f_tmp()
 

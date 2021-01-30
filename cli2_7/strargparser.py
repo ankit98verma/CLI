@@ -357,7 +357,7 @@ class StrArgParser:
                 self.f_tmp = open(res[c[:-1]][0], c[-1])
                 out_func = self.write_file
             if '-h' in ls_key:
-                self.commands[s[0]].show_help(out_func=out_func)
+                self.commands[s[0]].get_desc(out_func=out_func)
                 self.close_f_tmp()
                 return None, None, None, None
 
@@ -381,7 +381,7 @@ class StrArgParser:
     def show_help(self, out_func=print):
         for k, v in self.commands.items():
             out_func("Command " + k)
-            v.show_help(out_func=out_func)
+            v.get_desc(out_func=out_func)
             out_func("\t\t----x----\n")
         self.close_f_tmp()
 

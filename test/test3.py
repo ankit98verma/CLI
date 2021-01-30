@@ -5,9 +5,9 @@ def exit_prog(out_func):
     out_func("yeah! exiting")
 
 
-def c1(res):
-    print("C1:")
-    print(res)
+def c1(res, out_func):
+    out_func("C1:")
+    out_func(res)
 
 
 if __name__ == '__main__':
@@ -16,13 +16,16 @@ if __name__ == '__main__':
     print(par)
 
     par.add_command('c1', "Command 1", function=c1)
-    # par.get_command('c1').add_infinite_args(int)
-    par.get_command('c1').add_compulsory_arguments('-f', '--file', "The file name", narg=2)
-    par.get_command('c1').add_compulsory_arguments('-c', '--com', "The compulsory item name")
-    par.get_command('c1').add_optional_arguments('-n', '--number', "A number", narg=-1, param_type=int)
-    par.get_command('c1').add_optional_arguments('-o', '--option', "An option", narg=0)
-    # par.get_command('c1').add_positional_arguments('First pos arg', param_type=int)
-    # par.get_command('c1').add_positional_arguments('Second pos arg', param_type=float)
+    par.get_command('c1').add_infinite_arg('List of integers', int)
+    par.get_command('c1').add_compulsory_argument('-f', '--file', "The file name", narg=2)
+    par.get_command('c1').add_compulsory_argument('-c', '--com', "The compulsory item name")
+    par.get_command('c1').add_optional_argument('-n', '--number', "A number", narg=1, param_type=int)
+    par.get_command('c1').add_optional_argument('-o', '--option', "An option", narg=0)
+
+    par.get_command('c1').add_positional_argument('First pos arg', param_type=int)
+    par.get_command('c1').add_positional_argument('Second pos arg', param_type=float)
+
+    print(par.get_command('c1').show_help())
 
     par.run()
 
