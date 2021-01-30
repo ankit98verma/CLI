@@ -307,7 +307,9 @@ class ArgumentManager:
                 other_args_ind = sum([a in shs for a in arg_vals])
                 if other_args_ind > 0:
                     raise InsufficientNargs(a, a.narg - other_args_ind)
+
                 res.update(a.process_args(arg_vals))
+
                 # now remove the data from the std_opts
                 del(std_opts[op_ind:op_ind+a.narg+1])
 
@@ -331,7 +333,6 @@ class ArgumentManager:
         res = dict()
         if self.has_inf_args():
             p = self.inf_args[0]
-
             res.update(p.process_args(std_opts[0:]))
 
             for i in std_opts[0:p.narg]:
@@ -422,12 +423,17 @@ class Command:
         if '-h' in std_options:
             bundle = {'-h':[]}
             return bundle
+
         bundle = None
         try:
             bundle = self._arg_manager.build_bundle(std_options)
         except InsufficientNargs as e:
             print(e)
         except AbsentArg as e:
+            print(e)
+        except InsufficientPosArgs as e:
+            print(e)
+        except ValueError as e:
             print(e)
 
         return bundle
