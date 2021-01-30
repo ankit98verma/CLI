@@ -73,6 +73,35 @@ class Arguments:
         self.data_type = param_type
         self.narg = narg
 
+    def __repr__(self):
+        # todo
+        pass
+
+
+class ArgumentManager:
+
+    def __init__(self):
+        pass
+
+    def add_compulsory_argument(self):
+        pass
+
+    def add_optional_argument(self):
+        pass
+
+    def add_infinity_argument(self):
+        pass
+
+    def add_positional_argument(self):
+        pass
+
+    def get_list(self):
+        pass
+
+    def __repr__(self):
+        # todo
+        pass
+
 
 class Command:
 
