@@ -12,6 +12,68 @@ class CommandNotExecuted(Exception):
         return "'" + self.cmd_name + "' command is not executed"
 
 
+class WrongArgTpe(Exception):
+
+    def __init__(self, wrong_arg_type, correct_arg_type):
+        super().__init__()
+        self.msg = 'Cannot set the argument attributes. Correct argument type is: %s. Attributes set for: %s' % \
+                   (correct_arg_type, wrong_arg_type)
+
+    def __repr__(self):
+        return self.msg
+
+
+class Arguments:
+
+    ARG_TYPE = {'POS': 0, 'INF': 1, 'COM': 2, 'OPT': 3}
+
+    DATA_TYPES = [int, bool, float, str]
+
+    def __init__(self, arg_type):
+        self.arg_type = arg_type
+        self.sh = None
+        self.lf = None
+        self.des = None
+        self.data_type = None
+        self.narg = None
+
+    def set_compulsory_attr(self, short_form, long_form, description, param_type, narg):
+        if self.arg_type != Arguments.ARG_TYPE['COM']:
+            raise WrongArgTpe
+        self._set_attrs(short_form, long_form, description, param_type, narg)
+
+    def set_optional_attr(self, short_form, long_form, description, param_type, narg):
+        if self.arg_type != Arguments.ARG_TYPE['OPT']:
+            raise WrongArgTpe
+        self._set_attrs(short_form, long_form, description, param_type, narg)
+
+    def set_positional_attr(self, position, description, param_type):
+        if self.arg_type != Arguments.ARG_TYPE['POS']:
+            raise WrongArgTpe
+        short_form = str(position)
+        long_form = short_form
+        narg = 1
+
+        self._set_attrs(short_form, long_form, description, param_type, narg)
+
+    def set_infinity_attr(self, description, param_type):
+        if self.arg_type != Arguments.ARG_TYPE['INF']:
+            raise WrongArgTpe
+
+        short_form = 'inf'
+        long_form = '--infinity'
+        narg = -1
+
+        self._set_attrs(short_form, long_form, description, param_type, narg)
+
+    def _set_attrs(self, short_form, long_form, description, param_type, narg):
+        self.sh = short_form
+        self.lf = long_form
+        self.des = description
+        self.data_type = param_type
+        self.narg = narg
+
+
 class Command:
 
     def __init__(self, command_name, description, inf_positional, function):
@@ -135,17 +197,18 @@ class Command:
         return com_lf
 
     def standardize(self, options):
+        # convert the LFs (if any) to Shs
         shs = self.get_sh_list()
         lfs = self.get_lf_list()
 
-        options2 = options.copy()
-        i = 0
-        for o in options:
+        standard_options = options.copy()
+        for i, o in enumerate(options):
             if o in lfs:
-                ind = lfs.index(o)
-                options2[i] = shs[ind]
-            i += 1
-        return options2
+                standard_options[i] = shs[lfs.index(o)]
+
+        # separate out the positional and the optional arguments
+
+        return standard_options
 
     def bundle_data(self, options):
         bundle = dict()
