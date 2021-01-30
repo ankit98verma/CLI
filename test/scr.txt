@@ -1,5 +1,5 @@
 ls_cmd
 ls_cmd -v
 help -> tt.txt
-c12 1 2 3 4 5 --file dd dd -n 2323 222 333 333 -o 1 2 -c 34
+c1 1 2 3 4 5 --file dd dd -n 2323 222 333 333 -o 1 2 -c 34 -> t.txt
 exit

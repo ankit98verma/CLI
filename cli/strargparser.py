@@ -419,14 +419,13 @@ class Command:
 
         std_options = self._arg_manager.standardize_args(options)
         # hand the Absent argument error here
+        bundle = None
         try:
             bundle = self._arg_manager.build_bundle(std_options)
         except InsufficientNargs as e:
             print(e)
         except AbsentArg as e:
             print(e)
-
-        # proc = self.process_bundle(bundle)
 
         return bundle
 
@@ -527,7 +526,7 @@ class StrArgParser:
     def show_help(self, out_func=print):
         for k, v in self.commands.items():
             out_func("Command " + k)
-            v.get_desc(out_func=out_func)
+            v.show_help(out_func=out_func)
             out_func("\t\t----x----\n")
         self.close_f_tmp()
 
