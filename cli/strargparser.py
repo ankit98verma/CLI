@@ -419,6 +419,9 @@ class Command:
 
         std_options = self._arg_manager.standardize_args(options)
         # hand the Absent argument error here
+        if '-h' in std_options:
+            bundle = {'-h':[]}
+            return bundle
         bundle = None
         try:
             bundle = self._arg_manager.build_bundle(std_options)
