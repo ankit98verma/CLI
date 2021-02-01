@@ -374,18 +374,12 @@ class ArgumentManager:
 
 class Command:
 
-    def __init__(self, command_name, description, inf_positional, function):
+    def __init__(self, command_name, description, function):
         self.description = description
         self.command_name = command_name
         self._arg_manager = ArgumentManager()
 
         self.function = function
-
-        self.inf_positional = inf_positional
-        self.inf_type = None
-        self.has_positional = False
-        self.has_optional = True
-        self.has_compulsory = False
 
     def __repr__(self):
         string = "usage: " + self.command_name
@@ -474,8 +468,8 @@ class StrArgParser:
     def get_command(self, name):
         return self.commands[name]
 
-    def add_command(self, command, description, inf_positional=False, function=None):
-        c = Command(command, description, inf_positional, function)
+    def add_command(self, command, description, function=None):
+        c = Command(command, description, function)
         c.add_optional_argument('-h', '--help', 'Gives the details of the command', narg=0)
         c.add_optional_argument('->', '->', 'Overwrite the output to the file')
         c.add_optional_argument('->>', '->>', 'Append the output to the file')
