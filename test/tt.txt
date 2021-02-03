@@ -48,13 +48,11 @@ optional arguments:
 		----x----
 
 Command script
-usage: script [-h] [->] [->>] [-v] -f
+usage: script [-h] [->] [->>] [-v] The script files which is to be executed. They will be executed in order they are provided...
 
 Runs the script.
 
 
-compulsory arguments:
-	-f	'str'	--file_name	The script file which is to be executed. No. of values required: 1
 
 optional arguments:
 	-h	'str'	--help	Gives the details of the command. No. of values required: 0
@@ -62,7 +60,9 @@ optional arguments:
  	->>	'str'	->>	Append the output to the file. No. of values required: 1
  	-v	'str'	--verbose	Prints out the commands being executed from the script. No. of values required: 0
  
-
+infinite positional:
+	Type 'str'
+	are allowed
 
 		----x----
 

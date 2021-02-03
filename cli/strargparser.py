@@ -1,4 +1,6 @@
 import inspect
+
+
 # TODO: Comment the code
 
 
@@ -17,6 +19,12 @@ class WrongArgTpe(Exception):
     def __init__(self, wrong_arg_type, correct_arg_type):
         super().__init__('WrongArgTpe Exception:Cannot set the argument attributes. Correct argument type is: %s. '
                          'Attributes set for: %s' % (correct_arg_type, wrong_arg_type))
+
+
+class IncompleteArg(Exception):
+
+    def __init__(self, arg_details):
+        super().__init__('IncompleteArg: Incomplete argument i.e. %s' % arg_details)
 
 
 class AbsentArg(Exception):
@@ -40,7 +48,6 @@ class InsufficientNargs(Exception):
 
 
 class Arguments(dict):
-
     ARG_TYPES = {'POS': 0, 'INF': 1, 'COM': 2, 'OPT': 3}
     SH_INFO_TYPE = 'sh'
     LF_INFO_TYPE = 'lf'
@@ -163,7 +170,7 @@ class ArgumentManager:
 
     def add_pos_arg(self, description, param_type):
         arg = Arguments(Arguments.ARG_TYPES['POS'])
-        arg.set_positional_attr(len(self.pos_args)+1, description, param_type)
+        arg.set_positional_attr(len(self.pos_args) + 1, description, param_type)
         self.pos_args.append(arg)
 
     def has_comp_args(self):
@@ -301,7 +308,7 @@ class ArgumentManager:
                 if (len(std_opts) - op_ind - 1) < a.narg:
                     raise InsufficientNargs(a, len(std_opts) - op_ind - 1)
 
-                arg_vals = std_opts[op_ind+1:op_ind + a.narg + 1]
+                arg_vals = std_opts[op_ind + 1:op_ind + a.narg + 1]
 
                 # check that the arg_vals don't contain any other args indicator (comp or optional)
                 other_args_ind = sum([a in shs for a in arg_vals])
@@ -311,7 +318,7 @@ class ArgumentManager:
                 res.update(a.process_args(arg_vals))
 
                 # now remove the data from the std_opts
-                del(std_opts[op_ind:op_ind+a.narg+1])
+                del (std_opts[op_ind:op_ind + a.narg + 1])
 
         return std_opts, res
 
@@ -326,7 +333,7 @@ class ArgumentManager:
                 # go through each positional argument and get the results
                 res.update(p.process_args(std_opts[0:p.narg]))
 
-                del(std_opts[0:p.narg])
+                del (std_opts[0:p.narg])
         return std_opts, res
 
     def _bundle_inf_args(self, std_opts):
@@ -415,7 +422,7 @@ class Command:
         std_options = self._arg_manager.standardize_args(options)
         # hand the Absent argument error here
         if '-h' in std_options:
-            bundle = {'-h':[]}
+            bundle = {'-h': []}
             return bundle
 
         bundle = None
@@ -445,22 +452,22 @@ class StrArgParser:
         self.input_string = input_string
         self.is_loop = True
 
-        self.add_command('exit', "Close the CLI interface", function=self.exit_prog)
+        self.add_command('exit', "Close the CLI interface", function=self.exit_program)
         if not stripped_down:
             self.default_cmd()
 
     def default_cmd(self):
 
-        self.add_command('ls_cmd', 'Lists all the available command with usage', function=self.cmd_ls_cmd)
+        self.add_command('ls_cmd', 'Lists all the available command with usage', function=self._ls_cmd)
         self.get_command('ls_cmd').add_optional_argument('-v', '--verbose', "Give the output in detail", narg=0)
 
-        self.add_command('help', 'Gives details of all the available commands', function=self.show_help)
-        self.add_command('script', "Runs the script.", function=self.cmd_start_script)
-        self.get_command('script').add_compulsory_argument('-f', '--file_name',
-                                                                  "The script file which is to be executed", )
+        self.add_command('help', 'Gives details of all the available commands', function=self._help)
+        self.add_command('script', "Runs the script.", function=self._script)
+        self.get_command('script').add_infinite_arg("The script files which is to be executed. They will be executed "
+                                                    "in order they are provided")
         self.get_command('script').add_optional_argument('-v', '--verbose',
-                                                                'Prints out the commands being executed from '
-                                                                'the script', narg=0)
+                                                         'Prints out the commands being executed from '
+                                                         'the script', narg=0)
 
     def __repr__(self):
         return self.description
@@ -480,10 +487,69 @@ class StrArgParser:
             self.f_tmp.close()
             self.f_tmp = None
 
+    @staticmethod
+    def _get_options(input_str):
+
+        single_q_index = [None]
+        double_q_index = [None]
+
+        single_q_strs = []
+        double_q_strs = []
+
+        single_q_p = 0
+        double_q_p = 0
+
+        for i, charac in enumerate(input_str):
+            if charac == "'":
+                if double_q_index[0] is not None:
+                    continue
+                if single_q_p == 0:
+                    single_q_index[0] = i
+                else:
+                    single_q_strs.append(input_str[single_q_index[0] + 1:i])
+                    single_q_index[0] = None
+                single_q_p += 1
+                single_q_p %= 2
+            elif charac == '"':
+                if single_q_index[0] is not None:
+                    continue
+                if double_q_p == 0:
+                    double_q_index[0] = i
+                else:
+                    double_q_strs.append(input_str[double_q_index[0] + 1:i])
+                    double_q_index[0] = None
+                double_q_p += 1
+                double_q_p %= 2
+
+        if single_q_index[0] is not None:
+            raise IncompleteArg("Single quote not closed.")
+        if double_q_index[0] is not None:
+            raise IncompleteArg("Double quote not closed.")
+
+        single_q_strs.extend(double_q_strs)
+
+        for s_inst in single_q_strs:
+            s_inst_u = s_inst.replace(' ', '_')
+            input_str = input_str.replace(s_inst, s_inst_u)
+
+        # now split based on ' '
+        opts = input_str.split(' ')
+        for i, opts_inst in enumerate(opts):
+            if "'" in opts_inst or '"' in opts_inst:
+                opts[i] = opts_inst.strip('"').strip("'").replace('_', ' ')
+            opts[i] = opts[i].strip(' ')
+
+        return opts
+
     def decode_command(self, s):
         s = s.strip(' ')
         s = s.strip('\t')
-        s = s.split(' ')
+        try:
+            s = StrArgParser._get_options(s)
+        except IncompleteArg as e:
+            print(e)
+            return None, None, None, print
+
         try:
             s.remove('')
         except ValueError:
@@ -514,11 +580,12 @@ class StrArgParser:
             print("Command not found. Use 'help' command.")
             return None, None, None, print
 
-    def exit_prog(self):
+    def exit_program(self):
         print("Exiting")
-        return
+        self.is_loop = False
+        return True
 
-    def cmd_ls_cmd(self, res, out_func=print):
+    def _ls_cmd(self, res, out_func=print):
         is_verbose = '-v' in list(res.keys())
         for k, v in self.commands.items():
             out_func("Command: " + k),
@@ -526,36 +593,52 @@ class StrArgParser:
                 out_func(v)
                 out_func("\n" + v.description + "\n\n\t\t---x---\n")
 
-    def show_help(self, out_func=print):
+    def _help(self, out_func=print):
         for k, v in self.commands.items():
             out_func("Command " + k)
             v.show_help(out_func=out_func)
             out_func("\t\t----x----\n")
         self.close_f_tmp()
 
-    def cmd_start_script(self, res, out_func=print):
+    def _script(self, res, out_func=print):
+        exec_res = True
+        stop_exec = False
+
         try:
-            with open(res['-f'][0], 'r') as f:
+            for files in res['inf']:
+                i = 0
+                f = open(files, 'r')
                 for line in f:
-                    line = line.replace('\t', ' ')
-                    line = line.strip(' ')
-                    line = line.strip('\n')
+                    i += 1
+                    if line[0] == '#':
+                        continue
+                    line = line.replace('\t', '').strip(' ').strip('\n')
+                    if line[0] == '?' and exec_res is False:
+                        stop_exec = True
+                        out_func("Error: Stopping the script because the command at line no. %d of script file '%s' "
+                                 "return False" % (i-1, files))
+                        break
                     if line != '':
                         if '-v' in res:
                             out_func(self.input_string + line)
                         try:
-                            self.is_loop = self.exec_cmd(line)
+                            self.is_loop, exec_res = self.exec_cmd(line)
                         except CommandNotExecuted as e:
                             print(e)
                             break
                     if not self.is_loop:
                         break
+                if not self.is_loop or stop_exec:
+                    exec_res = False
+                    break
         except FileNotFoundError:
             out_func('The file not found')
             raise CommandNotExecuted('script')
         except UnicodeDecodeError:
             out_func('The data_struct in the file is corrupted')
             raise CommandNotExecuted('script')
+
+        return exec_res
 
     def run(self):
         self.is_loop = True
@@ -564,28 +647,28 @@ class StrArgParser:
             if len(s) == 0:
                 continue
             try:
-                self.is_loop = self.exec_cmd(s)
+                self.is_loop, _ = self.exec_cmd(s)
             except CommandNotExecuted as e:
                 print(e)
 
     def exec_cmd(self, s):
         (cmd, res, func, out_func) = self.decode_command(s)
+        exec_res = True
         if res is None:
-            return True
+            return self.is_loop, exec_res
         param_list = list(inspect.signature(func).parameters.keys())
         if 'res' in param_list and 'out_func' in param_list:
-            func(res, out_func=out_func)
+            exec_res = func(res, out_func=out_func)
         elif 'res' in param_list:
-            func(res)
+            exec_res = func(res)
         elif 'out_func' in param_list:
-            func(out_func=out_func)
+            exec_res = func(out_func=out_func)
         else:
-            func()
+            exec_res = func()
 
         self.close_f_tmp()
 
-        if cmd == 'exit':
-            return False
-        if cmd == 'script':
-            return self.is_loop
-        return True
+        if exec_res is None:
+            exec_res = True
+
+        return self.is_loop, exec_res

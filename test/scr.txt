@@ -1,5 +1,6 @@
-ls_cmd
+# This is testing the commenting part ls_cmd
 ls_cmd -v
 help -> tt.txt
-c1 1 2 3 4 5 --file dd dd -n 2323 222 333 333 -o 1 2 -c 34 -> t.txt
+c1 -f "aaa bb 'cc'" new -c 123213 2 3
+?
 exit

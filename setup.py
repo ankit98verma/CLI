@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='CLI',
-    version='2.0.0',
+    version='2.1.0',
     packages=find_packages(exclude=['test']),
     url='https://github.com/ankit98verma/CLI',
     author='Ankit Verma',
@@ -15,6 +15,6 @@ setup(
             ]
         },
     install_requires=[
-        'funcsigs',
+        '',
     ]
 )
