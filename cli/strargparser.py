@@ -2,7 +2,7 @@ import inspect
 
 
 # TODO: Comment the code
-
+# TODO: Require an ability to give the inifinte argument with short and long form options
 
 class CommandNotExecuted(Exception):
 
@@ -613,18 +613,23 @@ class StrArgParser:
                     if line[0] == '#':
                         continue
                     line = line.replace('\t', '').strip(' ').strip('\n')
-                    if line[0] == '?' and exec_res is False:
-                        stop_exec = True
-                        out_func("Error: Stopping the script because the command at line no. %d of script file '%s' "
-                                 "return False" % (i-1, files))
-                        break
+                    
                     if line != '':
+                        if line[0] == '?':
+                            if exec_res is False:
+                                stop_exec = True
+                                out_func("Error: Stopping the script because the command at line no. %d of script file '%s' "
+                                         "return False" % (i-1, files))
+                                break
+                            continue
+                            
                         if '-v' in res:
                             out_func(self.input_string + line)
                         try:
                             self.is_loop, exec_res = self.exec_cmd(line)
                         except CommandNotExecuted as e:
                             print(e)
+                            stop_exec = True
                             break
                     if not self.is_loop:
                         break
@@ -653,7 +658,7 @@ class StrArgParser:
 
     def exec_cmd(self, s):
         (cmd, res, func, out_func) = self.decode_command(s)
-        exec_res = True
+        exec_res = False
         if res is None:
             return self.is_loop, exec_res
         param_list = list(inspect.signature(func).parameters.keys())

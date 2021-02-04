@@ -8,7 +8,7 @@ def exit_prog(out_func):
 def c1(res, out_func):
     out_func("C1:")
     out_func(res)
-    return False
+
 
 
 if __name__ == '__main__':
