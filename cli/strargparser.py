@@ -2,7 +2,21 @@ import inspect
 import socket
 
 # TODO: Comment the code
-# TODO: Require the ability to get values over TCP/IP
+
+__CONN__ = None
+
+
+def _default_out(input_str):
+    if __CONN__ is None:
+        print(input_str)
+    else:
+        input_str = str(input_str)
+        input_str += '\n'
+        try:
+            __CONN__.sendall(input_str.encode())
+            __CONN__.sendall(''.encode())
+        except ConnectionError:
+            print(input_str)            
 
 
 class CommandNotExecuted(Exception):
@@ -162,7 +176,7 @@ class ArgumentManager:
 
     def add_inf_arg(self, description, param_type):
         if len(self.inf_args):
-            print("Cannot add more than one infinity vars")
+            _default_out("Cannot add more than one infinity vars")
             return
 
         arg = Arguments(Arguments.ARG_TYPES['INF'])
@@ -315,9 +329,11 @@ class ArgumentManager:
                     end_ind = op_ind + a.narg + 1
                     if (len(std_opts) - op_ind - 1) < a.narg:
                         raise InsufficientNargs(a, len(std_opts) - op_ind - 1)
-
+                if (end_ind == op_ind + 1) and arg_type == Arguments.ARG_TYPES['COM']:
+                    raise InsufficientNargs(a, 0)
+                
                 arg_vals = std_opts[op_ind + 1:end_ind]
-
+                
                 # check that the arg_vals don't contain any other args indicator (comp or optional)
                 other_args_ind = sum([a in shs for a in arg_vals])
                 if other_args_ind > 0:
@@ -405,7 +421,7 @@ class Command:
     def set_function(self, function):
         self.function = function
 
-    def show_help(self, out_func=print):
+    def show_help(self, out_func=_default_out):
         string = self.__repr__()
         string += "\n\n"
         string += self.description + "\n"
@@ -437,13 +453,13 @@ class Command:
         try:
             bundle = self._arg_manager.build_bundle(std_options)
         except InsufficientNargs as e:
-            print(e)
+            _default_out(e)
         except AbsentArg as e:
-            print(e)
+            _default_out(e)
         except InsufficientPosArgs as e:
-            print(e)
+            _default_out(e)
         except ValueError as e:
-            print(e)
+            _default_out(e)
 
         return bundle
 
@@ -485,7 +501,7 @@ class StrArgParser:
         self.get_command('script').add_infinite_arg("The script files which is to be executed. They will be executed "
                                                     "in order they are provided")
         self.get_command('script').add_optional_argument('-v', '--verbose',
-                                                         'Prints out the commands being executed from '
+                                                         '_default_out out the commands being executed from '
                                                          'the script', narg=0)
 
     def __repr__(self):
@@ -494,7 +510,7 @@ class StrArgParser:
     def get_command(self, name):
         return self.commands[name]
 
-    def add_command(self, command, description, function=None):
+    def add_command(self, command, description, function):
         c = Command(command, description, function)
         c.add_optional_argument('-h', '--help', 'Gives the details of the command', narg=0)
         c.add_optional_argument('->', '->', 'Overwrite the output to the file')
@@ -566,8 +582,8 @@ class StrArgParser:
         try:
             s = StrArgParser._get_options(s)
         except IncompleteArg as e:
-            print(e)
-            return None, None, None, print
+            _default_out(e)
+            return None, None, None, _default_out
 
         try:
             s.remove('')
@@ -575,10 +591,10 @@ class StrArgParser:
             pass
         try:
             res = self.commands[s[0]].decode_options(s[1:])
-            out_func = print
+            out_func = _default_out
 
             if res is None:
-                return None, None, None, print
+                return None, None, None, _default_out
 
             ls_key = list(res.keys())
             c = None
@@ -596,18 +612,18 @@ class StrArgParser:
 
             return s[0], res, self.commands[s[0]].function, out_func
         except KeyError:
-            print("Command not found. Use 'help' command.")
-            return None, None, None, print
+            _default_out("Command not found. Use 'help' command.")
+            return None, None, None, _default_out
 
     def _exit_prog(self):
-        print("Exiting")
+        _default_out("Exiting")
         self.is_loop = False
         if self.ip_port is not None:
             self._conn.close()
             self.listen_soc.close()
         return True
 
-    def _ls_cmd(self, res, out_func=print):
+    def _ls_cmd(self, res, out_func=_default_out):
         is_verbose = '-v' in list(res.keys())
         for k, v in self.commands.items():
             out_func("Command: " + k),
@@ -615,14 +631,14 @@ class StrArgParser:
                 out_func(v)
                 out_func("\n" + v.description + "\n\n\t\t---x---\n")
 
-    def _help(self, out_func=print):
+    def _help(self, out_func=_default_out):
         for k, v in self.commands.items():
             out_func("Command " + k)
             v.show_help(out_func=out_func)
             out_func("\t\t----x----\n")
         self.close_f_tmp()
 
-    def _script(self, res, out_func=print):
+    def _script(self, res, out_func=_default_out):
         exec_res = True
         stop_exec = False
 
@@ -650,7 +666,7 @@ class StrArgParser:
                         try:
                             self.is_loop, exec_res = self.exec_cmd(line)
                         except CommandNotExecuted as e:
-                            print(e)
+                            _default_out(e)
                             stop_exec = True
                             break
                     if not self.is_loop:
@@ -667,49 +683,61 @@ class StrArgParser:
 
         return exec_res
 
-    def get_conn(self):
-        print("Waiting for the connection...")
+    def _get_conn(self):
+        global __CONN__
+        _default_out("Waiting for the connection...")
         self._conn, addr = self.listen_soc.accept()
-
+        __CONN__ = self._conn
         self._conn.settimeout(1)
         
         return addr
+    
+    def _accept_network_cmd(self):
+        global __CONN__
+        addr  = self._get_conn()
+                
+        print("Connected to %s" % str(addr))
+        
+        while self._conn:
+            try:
+                data = self._conn.recv(1024)
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            s = data.decode()
+            s = s.strip(' ')
+            if len(s) == 0:
+                break
+            try:
+                print(self.input_string + s)
+                self.is_loop, _ = self.exec_cmd(s)
+            except CommandNotExecuted as e:
+                _default_out(e)
+        
+        __CONN__ = None
+        _default_out("Disconnected from %s" % str(addr))
+        self._conn.close()
+    
+    def _accept_local_cmd(self):
+        s = input(self.input_string).strip(' ')                
+        if len(s) == 0:
+            return
+        try:
+            self.is_loop, _ = self.exec_cmd(s)
+        except CommandNotExecuted as e:
+            _default_out(e)
     
     def run(self):
         self.is_loop = True
         while self.is_loop:
             if self.ip_port is not None:
-                addr  = self.get_conn()
-                
-                print("Connected to %s" % str(addr))
-                
-                while self._conn:
-                    try:
-                        data = self._conn.recv(1024)
-                    except socket.timeout:
-                        continue
-                    except OSError:
-                        break
-                    s = data.decode()
-                    s = s.strip(' ')
-                    if len(s) == 0:
-                        break
-                    try:
-                        print(self.input_string + s)
-                        self.is_loop, _ = self.exec_cmd(s)
-                    except CommandNotExecuted as e:
-                        print(e)
-                
-                print("Disconnected from %s" % str(addr))
+                self._accept_network_cmd()
             else:
-
-                s = input(self.input_string).strip(' ')                
-                if len(s) == 0:
-                    continue
-                try:
-                    self.is_loop, _ = self.exec_cmd(s)
-                except CommandNotExecuted as e:
-                    print(e)
+                self._accept_local_cmd()
+        
+        if self.listen_soc is not None:
+            self.listen_soc.close()
 
     def exec_cmd(self, s):
         (_, res, func, out_func) = self.decode_command(s)
@@ -737,7 +765,6 @@ class StrArgParser:
 class StrArgParserClient:
 
     def __init__(self):
-        
 
         self.parser = StrArgParser("Client side parser")
 
@@ -751,9 +778,25 @@ class StrArgParserClient:
         self.parser.get_command('connect').add_positional_argument('The IP address of the server')
         self.parser.get_command('connect').add_positional_argument('The port to connect to', param_type=int)
 
+    def _transact_cmd(self, conn_soc,  s):
+        conn_soc.sendall(s.encode())
+        data = b''
+        while True:
+            try:
+                data_tmp = conn_soc.recv(1024)
+            except socket.timeout:
+                rec_data = data.decode()
+                print(rec_data)
+                break
+            except OSError:
+                break
+            data += data_tmp
+            if not data_tmp:
+                break
 
     def _connect(self, res):
         conn_soc  = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        conn_soc.settimeout(0.1)
         
         conn_soc.connect((res['1'][0], res['2'][0]))
         
@@ -762,20 +805,23 @@ class StrArgParserClient:
         while go_next:
             s = input("(server) >> ")
             s = s.strip(' ')
+            if s == '':
+                continue
+            
             if s == 'disconnect':
-                go_next = False
+                break
             
             if s == 'exit':
                 s_tmp = ''
                 while s_tmp != 'y' and s_tmp != 'n':
                     s_tmp = input ("Closing the Server. Are you sure?(y/n):")
-                    if s_tmp == 'y':
-                        conn_soc.sendall(s.encode())
-                        go_next = False
-                    elif s_tmp == 'n':
+                    if s_tmp == 'n':
                         break
+                    elif s_tmp == 'y':
+                        self._transact_cmd(conn_soc, s)
+                        go_next = False   
             else:
-                conn_soc.sendall(s.encode())
+                self._transact_cmd(conn_soc, s)
         
         conn_soc.close()
             
