@@ -1,8 +1,8 @@
 import inspect
-
+import socket
 
 # TODO: Comment the code
-# TODO: Require an ability to give the inifinte argument with short and long form options
+# TODO: Require the ability to get values over TCP/IP
 
 
 class CommandNotExecuted(Exception):
@@ -455,16 +455,25 @@ class StrArgParser:
     def write_file(self, line, end="\n"):
         self.f_tmp.write(str(line) + end)
 
-    def __init__(self, description="", input_string=">> ", stripped_down=False):
+    def __init__(self, description="", input_string=">> ", stripped_down=False, ip_port=None):
         self.commands = dict()
         self.f_tmp = None
         self.description = description
         self.input_string = input_string
         self.is_loop = True
 
-        self.add_command('exit', "Close the CLI interface", function=self.exit_program)
+        self.add_command('exit', "Close the CLI interface", function=self._exit_prog)
         if not stripped_down:
             self.default_cmd()
+        
+        self.ip_port = ip_port
+        self._conn = None
+        if self.ip_port is not None:
+            self.listen_soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.listen_soc.bind(('127.0.0.1', self.ip_port))
+            self.listen_soc.listen()
+        else:
+            self.listen_soc = None
 
     def default_cmd(self):
 
@@ -590,9 +599,12 @@ class StrArgParser:
             print("Command not found. Use 'help' command.")
             return None, None, None, print
 
-    def exit_program(self):
+    def _exit_prog(self):
         print("Exiting")
         self.is_loop = False
+        if self.ip_port is not None:
+            self._conn.close()
+            self.listen_soc.close()
         return True
 
     def _ls_cmd(self, res, out_func=print):
@@ -655,19 +667,52 @@ class StrArgParser:
 
         return exec_res
 
+    def get_conn(self):
+        print("Waiting for the connection...")
+        self._conn, addr = self.listen_soc.accept()
+
+        self._conn.settimeout(1)
+        
+        return addr
+    
     def run(self):
         self.is_loop = True
         while self.is_loop:
-            s = input(self.input_string).strip(' ')
-            if len(s) == 0:
-                continue
-            try:
-                self.is_loop, _ = self.exec_cmd(s)
-            except CommandNotExecuted as e:
-                print(e)
+            if self.ip_port is not None:
+                addr  = self.get_conn()
+                
+                print("Connected to %s" % str(addr))
+                
+                while self._conn:
+                    try:
+                        data = self._conn.recv(1024)
+                    except socket.timeout:
+                        continue
+                    except OSError:
+                        break
+                    s = data.decode()
+                    s = s.strip(' ')
+                    if len(s) == 0:
+                        break
+                    try:
+                        print(self.input_string + s)
+                        self.is_loop, _ = self.exec_cmd(s)
+                    except CommandNotExecuted as e:
+                        print(e)
+                
+                print("Disconnected from %s" % str(addr))
+            else:
+
+                s = input(self.input_string).strip(' ')                
+                if len(s) == 0:
+                    continue
+                try:
+                    self.is_loop, _ = self.exec_cmd(s)
+                except CommandNotExecuted as e:
+                    print(e)
 
     def exec_cmd(self, s):
-        (cmd, res, func, out_func) = self.decode_command(s)
+        (_, res, func, out_func) = self.decode_command(s)
         exec_res = False
         if res is None:
             return self.is_loop, exec_res
@@ -687,3 +732,50 @@ class StrArgParser:
             exec_res = True
 
         return self.is_loop, exec_res
+
+
+class StrArgParserClient:
+
+    def __init__(self):
+        
+
+        self.parser = StrArgParser("Client side parser")
+
+        self.setup_cmds()
+
+    def run(self):
+        self.parser.run()
+
+    def setup_cmds(self):
+        self.parser.add_command('connect', "Connect to a server", self._connect)
+        self.parser.get_command('connect').add_positional_argument('The IP address of the server')
+        self.parser.get_command('connect').add_positional_argument('The port to connect to', param_type=int)
+
+
+    def _connect(self, res):
+        conn_soc  = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        
+        conn_soc.connect((res['1'][0], res['2'][0]))
+        
+        go_next = True
+        s = ''
+        while go_next:
+            s = input("(server) >> ")
+            s = s.strip(' ')
+            if s == 'disconnect':
+                go_next = False
+            
+            if s == 'exit':
+                s_tmp = ''
+                while s_tmp != 'y' and s_tmp != 'n':
+                    s_tmp = input ("Closing the Server. Are you sure?(y/n):")
+                    if s_tmp == 'y':
+                        conn_soc.sendall(s.encode())
+                        go_next = False
+                    elif s_tmp == 'n':
+                        break
+            else:
+                conn_soc.sendall(s.encode())
+        
+        conn_soc.close()
+            
