@@ -18,13 +18,13 @@ if __name__ == '__main__':
 
     par.add_command('c1', "Command 1", function=c1)
     par.get_command('c1').add_infinite_arg('List of integers', int)
-    par.get_command('c1').add_compulsory_argument('-f', '--file', "The file name", narg=2)
+    par.get_command('c1').add_compulsory_argument('-f', '--file', "The file name", narg=argp.StrArgParser.INF)
     par.get_command('c1').add_compulsory_argument('-c', '--com', "The compulsory item name")
-    par.get_command('c1').add_optional_argument('-n', '--number', "A number", narg=1, param_type=int)
-    par.get_command('c1').add_optional_argument('-o', '--option', "An option", narg=0)
+    # par.get_command('c1').add_optional_argument('-n', '--number', "A number", narg=1, param_type=int)
+    # par.get_command('c1').add_optional_argument('-o', '--option', "An option", narg=0)
 
-    par.get_command('c1').add_positional_argument('First pos arg', param_type=int)
-    par.get_command('c1').add_positional_argument('Second pos arg', param_type=float)
+    # par.get_command('c1').add_positional_argument('First pos arg', param_type=int)
+    # par.get_command('c1').add_positional_argument('Second pos arg', param_type=float)
 
     print(par.get_command('c1').show_help())
 

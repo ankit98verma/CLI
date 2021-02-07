@@ -4,6 +4,7 @@ import inspect
 # TODO: Comment the code
 # TODO: Require an ability to give the inifinte argument with short and long form options
 
+
 class CommandNotExecuted(Exception):
 
     def __init__(self, cmd_name):
@@ -304,11 +305,18 @@ class ArgumentManager:
                     else:
                         continue
                 op_ind = std_opts.index(a.sh)
+                if a.narg == StrArgParser.INF:
+                    # this has an infinite argument requirement. Find the next in the option list which is in shs list.
+                    end_ind  = len(std_opts)
+                    for i, p in enumerate(std_opts[op_ind+1:]):
+                        if p in shs:
+                            end_ind = op_ind + i + 1
+                else:
+                    end_ind = op_ind + a.narg + 1
+                    if (len(std_opts) - op_ind - 1) < a.narg:
+                        raise InsufficientNargs(a, len(std_opts) - op_ind - 1)
 
-                if (len(std_opts) - op_ind - 1) < a.narg:
-                    raise InsufficientNargs(a, len(std_opts) - op_ind - 1)
-
-                arg_vals = std_opts[op_ind + 1:op_ind + a.narg + 1]
+                arg_vals = std_opts[op_ind + 1:end_ind]
 
                 # check that the arg_vals don't contain any other args indicator (comp or optional)
                 other_args_ind = sum([a in shs for a in arg_vals])
@@ -318,7 +326,7 @@ class ArgumentManager:
                 res.update(a.process_args(arg_vals))
 
                 # now remove the data from the std_opts
-                del (std_opts[op_ind:op_ind + a.narg + 1])
+                del (std_opts[op_ind: end_ind])
 
         return std_opts, res
 
@@ -441,6 +449,8 @@ class Command:
 
 
 class StrArgParser:
+
+    INF = -1
 
     def write_file(self, line, end="\n"):
         self.f_tmp.write(str(line) + end)
