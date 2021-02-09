@@ -674,8 +674,9 @@ class StrArgParser:
                 if not self.is_loop or stop_exec:
                     exec_res = False
                     break
-        except FileNotFoundError:
-            out_func('The file not found')
+        except FileNotFoundError as e:
+            out_func('The file not found.')
+            out_func(e)
             raise CommandNotExecuted('script')
         except UnicodeDecodeError:
             out_func('The data_struct in the file is corrupted')
