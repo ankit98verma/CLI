@@ -1,6 +1,7 @@
 import inspect
 import socket
 import os
+from time import sleep
 
 # TODO: Comment the code
 
@@ -527,7 +528,7 @@ class StrArgParser:
             self.f_tmp = None
 
     def _preprocess_input(self, input_s):
-        if input_s in self.get_cmd_list():
+        if input_s.split(' ')[0] in self.get_cmd_list():
             return input_s
         
         if os.path.isfile(input_s):
@@ -796,6 +797,8 @@ class StrArgParserClient:
         self.parser.add_command('connect', "Connect to a server", self._connect)
         self.parser.get_command('connect').add_positional_argument('The IP address of the server')
         self.parser.get_command('connect').add_positional_argument('The port to connect to', param_type=int)
+        self.parser.get_command('connect').add_optional_argument('-rn', '--Retry_Nos', 'Number of times to retry to connect. Give -1 for inifinitly. '
+                                                                                        'Default is 5 times with delay of 1 second.', narg=1, param_type=int)
 
     def _transact_cmd(self, conn_soc,  s):
         conn_soc.sendall(s.encode())
@@ -813,12 +816,29 @@ class StrArgParserClient:
             if not data_tmp:
                 break
 
-    def _connect(self, res):
+    def _connect(self, res, out_func):
         conn_soc  = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        conn_soc.settimeout(0.1)
+        # conn_soc.settimeout(0.1)
         
-        conn_soc.connect((res['1'][0], res['2'][0]))
+        out_func('Trying to connect to %s at port %s' % (res['1'][0], res['2'][0]))
+
+        connected = False
+        retry_nos = 5
+        if '-rn' in res.keys():
+            retry_nos = res['-rn'][0]
+        while retry_nos != 0:
+            try:
+                conn_soc.connect((res['1'][0], res['2'][0]))
+                connected = True
+                break
+            except ConnectionRefusedError:
+                out_func("Connection Refused. Trying again")
+            sleep(1)
+            retry_nos -= 1
         
+        if not connected:
+            return False
+        out_func("Connected!")
         go_next = True
         s = ''
         while go_next:
@@ -843,4 +863,6 @@ class StrArgParserClient:
                 self._transact_cmd(conn_soc, s)
         
         conn_soc.close()
+        
+        return True
             
