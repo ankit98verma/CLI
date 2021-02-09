@@ -1,5 +1,6 @@
 import inspect
 import socket
+import os
 
 # TODO: Comment the code
 
@@ -491,6 +492,9 @@ class StrArgParser:
         else:
             self.listen_soc = None
 
+    def get_cmd_list(self):
+        return self.commands.keys()
+
     def default_cmd(self):
 
         self.add_command('ls_cmd', 'Lists all the available command with usage', function=self._ls_cmd)
@@ -521,6 +525,18 @@ class StrArgParser:
         if self.f_tmp is not None:
             self.f_tmp.close()
             self.f_tmp = None
+
+    def _preprocess_input(self, input_s):
+        if input_s in self.get_cmd_list():
+            return input_s
+        
+        if os.path.isfile(input_s):
+            input_s = "script -v " + input_s
+            return input_s
+        else:
+            _default_out(input_s + " is neither a command nor a script")
+            raise CommandNotExecuted(input_s)
+
 
     @staticmethod
     def _get_options(input_str):
@@ -712,6 +728,7 @@ class StrArgParser:
                 break
             try:
                 print(self.input_string + s)
+                s = self._preprocess_input(s)
                 self.is_loop, _ = self.exec_cmd(s)
             except CommandNotExecuted as e:
                 _default_out(e)
@@ -725,6 +742,7 @@ class StrArgParser:
         if len(s) == 0:
             return
         try:
+            s = self._preprocess_input(s)
             self.is_loop, _ = self.exec_cmd(s)
         except CommandNotExecuted as e:
             _default_out(e)
