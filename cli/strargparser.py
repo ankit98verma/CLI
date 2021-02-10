@@ -4,6 +4,7 @@ import os
 from time import sleep
 
 # TODO: Comment the code
+# TODO: Allow multiple access network connection with thread safe
 
 __CONN__ = None
 
@@ -20,6 +21,14 @@ def _default_out(input_str):
         except ConnectionError:
             print(input_str)            
 
+class IllegalFunctionDefException(Exception):
+
+    def __init__(self, func_str):
+        super().__init__(func_str + " definition is Illegal")
+        self.func_str = func_str
+
+    def __repr__(self):
+        return "'" + self.func_str + " definition is Illegal"
 
 class CommandNotExecuted(Exception):
 
@@ -473,7 +482,7 @@ class StrArgParser:
     def write_file(self, line, end="\n"):
         self.f_tmp.write(str(line) + end)
 
-    def __init__(self, description="", input_string=">> ", stripped_down=False, ip_port=None):
+    def __init__(self, description="", input_string=">> ", stripped_down=False, ip_port=None, rlocker=None):
         self.commands = dict()
         self.f_tmp = None
         self.description = description
@@ -485,8 +494,12 @@ class StrArgParser:
             self.default_cmd()
         
         self.ip_port = ip_port
+        self.rlocker = rlocker
         self._conn = None
         if self.ip_port is not None:
+            if self.rlocker is None:
+                raise Exception("Provide a RLock when using networking")
+            
             self.listen_soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.listen_soc.bind(('127.0.0.1', self.ip_port))
             self.listen_soc.listen()
@@ -515,8 +528,28 @@ class StrArgParser:
     def get_command(self, name):
         return self.commands[name]
 
+    @staticmethod
+    def verify_func_def(func):
+        param_list = list(inspect.signature(func).parameters.keys())
+        if len(param_list) >= 3:
+            raise IllegalFunctionDefException(str(func))
+
+        if len(param_list) == 2:
+            if 'res' not in param_list:
+                raise IllegalFunctionDefException(str(func) + " missing 'res' parameter")
+            if 'out_func' not in param_list:
+                raise IllegalFunctionDefException(str(func) + " missing 'out_func' parameter")
+        else:
+            # there is only one parameter
+            if 'res' not in param_list:
+                raise IllegalFunctionDefException(str(func) + " missing 'res' parameter")
+        
+
     def add_command(self, command, description, function):
+        # verify the function defintion
+        StrArgParser.verify_func_def(function)
         c = Command(command, description, function)
+
         c.add_optional_argument('-h', '--help', 'Gives the details of the command', narg=0)
         c.add_optional_argument('->', '->', 'Overwrite the output to the file')
         c.add_optional_argument('->>', '->>', 'Append the output to the file')
@@ -632,7 +665,7 @@ class StrArgParser:
             _default_out("Command not found. Use 'help' command.")
             return None, None, None, _default_out
 
-    def _exit_prog(self):
+    def _exit_prog(self, res):
         _default_out("Exiting")
         self.is_loop = False
         if self.ip_port is not None:
@@ -648,7 +681,7 @@ class StrArgParser:
                 out_func(v)
                 out_func("\n" + v.description + "\n\n\t\t---x---\n")
 
-    def _help(self, out_func=_default_out):
+    def _help(self, res, out_func=_default_out):
         for k, v in self.commands.items():
             out_func("Command " + k)
             v.show_help(out_func=out_func)
@@ -765,14 +798,21 @@ class StrArgParser:
         if res is None:
             return self.is_loop, exec_res
         param_list = list(inspect.signature(func).parameters.keys())
+        
+        # add the lock object in res.
+        res['lock'] = self.rlocker
+        
         if 'res' in param_list and 'out_func' in param_list:
             exec_res = func(res, out_func=out_func)
         elif 'res' in param_list:
             exec_res = func(res)
-        elif 'out_func' in param_list:
-            exec_res = func(out_func=out_func)
         else:
-            exec_res = func()
+            # this should never happen because we are verifying the function definition
+            pass
+        # elif 'out_func' in param_list:
+        #     exec_res = func(out_func=out_func)
+        # else:
+        #     exec_res = func()
 
         self.close_f_tmp()
 

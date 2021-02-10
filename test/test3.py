@@ -10,13 +10,19 @@ def c1(res, out_func):
     out_func(res)
 
 
+class  A:
+    
+    def c1(self):
+        print('A')
 
 if __name__ == '__main__':
+
+    a = A()
 
     par = argp.StrArgParser(description="Parser 1")
     print(par)
 
-    par.add_command('c1', "Command 1", function=c1)
+    par.add_command('c1', "Command 1", function=a.c1)
     par.get_command('c1').add_infinite_arg('List of integers', int)
     par.get_command('c1').add_compulsory_argument('-f', '--file', "The file name", narg=argp.StrArgParser.INF)
     par.get_command('c1').add_compulsory_argument('-c', '--com', "The compulsory item name")
