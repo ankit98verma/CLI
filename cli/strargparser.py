@@ -499,7 +499,6 @@ class ParserThreadManager:
         for k in names:
             self.threads[k].join(1)
             if not self.threads[k].is_alive():
-                print("Joined: %s" % k)
                 self.threads.pop(k)
     
     def stop_threads(self):
@@ -872,7 +871,7 @@ class StrArgParser:
         while self.is_loop:
             self.th_manager.update_thread_list()
         
-        print("Joining the threads")
+        # print("Joining the threads")
         self.th_manager.stop_threads()        
 
 
