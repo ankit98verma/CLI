@@ -1,4 +1,5 @@
 from cli import strargparser as argp
+from threading import RLock
 
 
 def exit_prog(out_func):
@@ -12,8 +13,9 @@ def c1(res, out_func):
 
 
 if __name__ == '__main__':
+    rlck = RLock()
 
-    par = argp.StrArgParser(description="Parser 1", ip_port=5000)
+    par = argp.StrArgParser(description="Parser 1", ip_port=5000, rlocker=rlck)
     print(par)
 
     par.add_command('c1', "Command 1", function=c1)
@@ -29,18 +31,4 @@ if __name__ == '__main__':
     print(par.get_command('c1').show_help())
 
     par.run()
-
-    # par.get_command('exit').set_function(exit_prog)
-
-    # par.add_command('exit', "Close the CLI interface", function=exit_prog)
-    # input_string = ">>"
-    # loop = True
-    # while loop:
-    #     s = input(input_string).strip(' ')
-    #     if len(s) == 0:
-    #         continue
-    #     try:
-    #         loop = exec_cmd(s, par)
-    #     except argp.CommandNotExecuted as e:
-    #         print(e)
 
