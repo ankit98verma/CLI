@@ -6,7 +6,6 @@ from threading import Thread
 from threading import current_thread
 
 # TODO: Comment the code
-# TODO: Allow multiple access network connection with thread safe
 
 __CONN__ = None
 
@@ -754,7 +753,7 @@ class StrArgParser:
                         if '-v' in res:
                             out_func(self.input_string + line)
                         try:
-                            self.is_loop, exec_res = self.exec_cmd(line)
+                            exec_res = self.exec_cmd(line)
                         except CommandNotExecuted as e:
                             _default_out(e)
                             stop_exec = True
@@ -775,16 +774,22 @@ class StrArgParser:
         return exec_res
     
     def exec_cmd(self, s, _conn=None):
+        s = s.strip(' ')
+        if len(s) == 0:
+            return True
+        
+        s = self._preprocess_input(s.strip(' '))
+
         global __CONN__
         
         (_, res, func, out_func) = self.decode_command(s)
         exec_res = False
         if res is None:
-            return self.is_loop, exec_res
+            return exec_res
         param_list = list(inspect.signature(func).parameters.keys())
         
         if self.rlocker is not None:
-            print("Acquiring the lock")
+            # print("Acquiring the lock")
             self.rlocker.acquire()
 
         if _conn is not None:
@@ -805,13 +810,13 @@ class StrArgParser:
             __CONN__ = prev_CONN
         
         if self.rlocker is not None:
-            print("Releasing the lock")
+            # print("Releasing the lock")
             self.rlocker.release()
 
         if exec_res is None:
             exec_res = True
 
-        return self.is_loop, exec_res
+        return exec_res
 
     def _get_conn(self):
         _default_out("Waiting for the connection...")
@@ -819,7 +824,7 @@ class StrArgParser:
         while self.is_conn_loop:
             try:
                 _conn, addr = self.listen_soc.accept()
-                print("Connected to %s" % str(addr))
+                # print("Connected to %s" % str(addr))
                 self.th_manager.run_new_thread('Conn_%d:%s' % (i, addr[0]), self._accept_network_cmd, (_conn, ))
                 i += 1
             except socket.timeout:
@@ -837,11 +842,9 @@ class StrArgParser:
         
         if data:
             s = data.decode()
-            s = s.strip(' ')
             try:
                 print(("(%s)" % current_thread().name)  + self.input_string + s)
-                s = self._preprocess_input(s)
-                self.is_loop, _ = self.exec_cmd(s, _conn=_conn)
+                self.exec_cmd(s, _conn=_conn)
             except CommandNotExecuted as e:
                 _default_out(e)
         
@@ -850,12 +853,9 @@ class StrArgParser:
     
     def _accept_local_cmd(self):
         while self.is_loop:
-            s = input(self.input_string).strip(' ')                
-            if len(s) == 0:
-                continue
+            s = input(self.input_string)
             try:
-                s = self._preprocess_input(s)
-                self.is_loop, _ = self.exec_cmd(s)
+                self.exec_cmd(s)
             except CommandNotExecuted as e:
                 _default_out(e)
     
