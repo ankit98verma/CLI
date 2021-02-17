@@ -15,7 +15,7 @@ def c1(res, out_func):
 if __name__ == '__main__':
     rlck = RLock()
 
-    par = argp.StrArgParser(description="Parser 1", ip_port=5000, rlocker=rlck)
+    par = argp.StrArgParser(description="Parser 1", ip_port=5000, rlocker=rlck, input_string="hello>> ")
     print(par)
 
     par.add_command('c1', "Command 1", function=c1)
@@ -31,4 +31,6 @@ if __name__ == '__main__':
     print(par.get_command('c1').show_help())
 
     par.run()
+
+
 

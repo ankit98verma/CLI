@@ -6,7 +6,6 @@ from threading import Thread
 from threading import current_thread
 
 # TODO: Comment the code
-# TODO: Allow multiple access network connection with thread safe
 
 __CONN__ = None
 
@@ -21,7 +20,9 @@ def _default_out(input_str):
             __CONN__.sendall(input_str.encode())
             __CONN__.sendall(''.encode())
         except ConnectionError:
-            print(input_str)            
+            print(input_str)
+        except OSError:
+            print(input_str)
 
 class IllegalFunctionDefException(Exception):
 
@@ -483,15 +484,17 @@ class ThreadException(Exception):
 
 class ParserThreadManager:
 
-    def __init__(self):
+    def __init__(self, rlocker):
         self.threads = {}
+        self.rlocker = rlocker
     
     def run_new_thread(self, name, func, args):
         if name in self.threads.keys():
             raise ThreadException("Thread %s already exists." % name)
         
         th = Thread(target=func, args=args, name=name)
-        self.threads[name] = th
+        with self.rlocker:
+            self.threads[name] = th
         th.start()
     
     def update_thread_list(self):
@@ -499,7 +502,8 @@ class ParserThreadManager:
         for k in names:
             self.threads[k].join(1)
             if not self.threads[k].is_alive():
-                self.threads.pop(k)
+                with self.rlocker:
+                    self.threads.pop(k)
     
     def stop_threads(self):
         while len(self.threads) != 0:
@@ -508,7 +512,8 @@ class ParserThreadManager:
                 # TODO: May be use a variable for timeout
                 self.threads[k].join(1)
                 if not self.threads[k].is_alive():
-                    self.threads.pop(k)
+                    with self.rlocker:
+                        self.threads.pop(k)
 
 
 class StrArgParser:
@@ -530,6 +535,7 @@ class StrArgParser:
         self.allow_net_admin = allow_net_admin
         
         self.add_command('exit', "Close the CLI interface", function=self._exit_prog)
+        self.add_command('input_string', "Prints the string displayed to user asking for the input.", function=self._input_string)
         if not stripped_down:
             self.default_cmd()
         
@@ -547,7 +553,7 @@ class StrArgParser:
         else:
             self.listen_soc = None
         
-        self.th_manager = ParserThreadManager()
+        self.th_manager = ParserThreadManager(self.rlocker)
 
     def get_cmd_list(self):
         return self.commands.keys()
@@ -597,6 +603,9 @@ class StrArgParser:
         c.add_optional_argument('->>', '->>', 'Append the output to the file')
         self.commands[command] = c
 
+    def remove_command(self, command):
+        self.commands.pop(command)
+        
     def close_f_tmp(self):
         if self.f_tmp is not None:
             self.f_tmp.close()
@@ -713,6 +722,11 @@ class StrArgParser:
 
         return True
 
+    def _input_string(self, res, out_func=_default_out):
+        out_func(self.input_string)
+
+        return True
+
     def _ls_cmd(self, res, out_func=_default_out):
         is_verbose = '-v' in list(res.keys())
         for k, v in self.commands.items():
@@ -754,7 +768,7 @@ class StrArgParser:
                         if '-v' in res:
                             out_func(self.input_string + line)
                         try:
-                            self.is_loop, exec_res = self.exec_cmd(line)
+                            exec_res = self.exec_cmd(line)
                         except CommandNotExecuted as e:
                             _default_out(e)
                             stop_exec = True
@@ -776,28 +790,35 @@ class StrArgParser:
     
     def exec_cmd(self, s, _conn=None):
         global __CONN__
-        
-        (_, res, func, out_func) = self.decode_command(s)
-        exec_res = False
-        if res is None:
-            return self.is_loop, exec_res
-        param_list = list(inspect.signature(func).parameters.keys())
-        
-        if self.rlocker is not None:
-            print("Acquiring the lock")
-            self.rlocker.acquire()
-
         if _conn is not None:
             prev_CONN = __CONN__
             __CONN__ = _conn
+        
+        s = s.strip(' ')
+        if len(s) == 0:
+            return True
+        
+        s = self._preprocess_input(s.strip(' '))
 
+        (_, res, func, out_func) = self.decode_command(s)
+        exec_res = False
+        if res is None:
+            return exec_res
+        param_list = list(inspect.signature(func).parameters.keys())
+        
+        if self.rlocker is not None:
+            # print("Acquiring the lock")
+            self.rlocker.acquire()
+
+        # add conn to the res before passing it to the func
+        res['conn'] = _conn
         if 'res' in param_list and 'out_func' in param_list:
             exec_res = func(res, out_func=out_func)
         elif 'res' in param_list:
             exec_res = func(res)
         else:
             # this should never happen because we are verifying the function definition
-            raise Exception("Something went very wrong! Contact for support")
+            raise Exception("Something went very wrong! Contact for support.")
 
         self.close_f_tmp()
 
@@ -805,21 +826,21 @@ class StrArgParser:
             __CONN__ = prev_CONN
         
         if self.rlocker is not None:
-            print("Releasing the lock")
+            # print("Releasing the lock")
             self.rlocker.release()
 
         if exec_res is None:
             exec_res = True
 
-        return self.is_loop, exec_res
+        return exec_res
 
-    def _get_conn(self):
+    def _get_conn(self, listen_soc):
         _default_out("Waiting for the connection...")
         i = 0
         while self.is_conn_loop:
             try:
-                _conn, addr = self.listen_soc.accept()
-                print("Connected to %s" % str(addr))
+                _conn, addr = listen_soc.accept()
+                # print("Connected to %s" % str(addr))
                 self.th_manager.run_new_thread('Conn_%d:%s' % (i, addr[0]), self._accept_network_cmd, (_conn, ))
                 i += 1
             except socket.timeout:
@@ -827,7 +848,7 @@ class StrArgParser:
         
         _default_out("Stopped listening for connections...")
         
-        self.listen_soc.close()
+        listen_soc.close()
     
     def _accept_network_cmd(self, _conn):
         try:
@@ -837,11 +858,9 @@ class StrArgParser:
         
         if data:
             s = data.decode()
-            s = s.strip(' ')
             try:
-                print(("(%s)" % current_thread().name)  + self.input_string + s)
-                s = self._preprocess_input(s)
-                self.is_loop, _ = self.exec_cmd(s, _conn=_conn)
+                print(("{%s}" % current_thread().name)  + self.input_string + s)
+                self.exec_cmd(s, _conn=_conn)
             except CommandNotExecuted as e:
                 _default_out(e)
         
@@ -850,29 +869,30 @@ class StrArgParser:
     
     def _accept_local_cmd(self):
         while self.is_loop:
-            s = input(self.input_string).strip(' ')                
-            if len(s) == 0:
-                continue
+            s = input(self.input_string)
             try:
-                s = self._preprocess_input(s)
-                self.is_loop, _ = self.exec_cmd(s)
+                self.exec_cmd(s)
             except CommandNotExecuted as e:
                 _default_out(e)
     
     def run(self):
         self.is_loop = True
-        # create a thread for local command accept
-        self.th_manager.run_new_thread("LocalCMD", self._accept_local_cmd, args=())
         
         if self.ip_port is not None:
             # start the listening over a separate thread with _get_conn
-            self.th_manager.run_new_thread("NetCMD", self._get_conn, args=())
+            self.th_manager.run_new_thread("NetCMD", self._get_conn, args=(self.listen_soc,))
+            
+            # create a thread for local command accept
+            self.th_manager.run_new_thread("LocalCMD", self._accept_local_cmd, args=())
 
-        while self.is_loop:
-            self.th_manager.update_thread_list()
+            # start the threads management
+            while self.is_loop:
+                self.th_manager.update_thread_list()
+        else:
+            self._accept_local_cmd()
         
         # print("Joining the threads")
-        self.th_manager.stop_threads()        
+        self.th_manager.stop_threads()
 
 
 class StrArgParserClient:
@@ -893,7 +913,7 @@ class StrArgParserClient:
         self.parser.get_command('connect').add_optional_argument('-rn', '--Retry_Nos', 'Number of times to retry to connect. Give -1 for inifinitly. '
                                                                                         'Default is 5 times with delay of 1 second.', narg=1, param_type=int)
 
-    def _transact_cmd(self, conn_soc,  s, out_func):
+    def _transact_cmd(self, conn_soc,  s, out_func=None):
         
         if conn_soc is None:
             return
@@ -909,11 +929,16 @@ class StrArgParserClient:
             if not data_tmp:
                 break
         rec_data = data.decode()
-        out_func(rec_data)
+        if out_func is not None:
+            out_func(rec_data)
         conn_soc.close()
+
+        return rec_data
 
     def _connect_utility(self, res, out_func):
         conn_soc  = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        conn_soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        conn_soc.settimeout(1)
         retry_nos = 5
         if '-rn' in res.keys():
             retry_nos = res['-rn'][0]
@@ -924,6 +949,10 @@ class StrArgParserClient:
                 return conn_soc
             except ConnectionRefusedError:
                 out_func("Connection Refused. Trying again")
+            except ConnectionAbortedError:
+                out_func("Connection Aborted. Trying again")
+            except socket.timeout:
+                out_func("Timeout. Trying again")
             sleep(1)
             retry_nos -= 1
         
@@ -935,22 +964,29 @@ class StrArgParserClient:
 
         conn_soc  = self._connect_utility(res, out_func)
 
-        out_func("Connected!")
         if conn_soc is None:
             out_func("Error: Cannot connect to %s at port %s" % (res['1'][0], res['2'][0]))
             return False
         
-        conn_soc.close()
+        input_str = self._transact_cmd(conn_soc, 'input_string')
+        input_str = input_str.replace('\n', '')
+        input_str = input_str.replace('>>', '')
+        input_str = input_str.replace('$', '')
+        input_str = input_str.replace(':', '')
+        input_str = input_str.strip(' ')
+
+        out_func("Connected!")
+        
         go_next = True
         s = ''
         while go_next:
-            s = input("(server) >> ")
+            s = input("(%s) >> " % input_str)
             s = s.strip(' ')
             if s == '':
                 continue
             
             if s == 'disconnect':
-                go_next = False
+                break
             
             if s == 'exit':
                 s_tmp = ''
