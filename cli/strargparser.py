@@ -790,6 +790,12 @@ class StrArgParser:
         return exec_res
     
     def exec_cmd(self, s, _conn=None):
+        s = s.strip(' ')
+        if len(s) == 0:
+            return True
+        
+        s = self._preprocess_input(s.strip(' '))
+
         global __CONN__
         if _conn is not None:
             with self.rlocker:
