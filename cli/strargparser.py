@@ -19,7 +19,7 @@ def _default_out(input_str):
         input_str += '\n'
         try:
             __CONN__.sendall(input_str.encode())
-            __CONN__.sendall(''.encode())
+            __CONN__.sendall("".encode())
         except ConnectionError:
             print(input_str)
         except OSError:
@@ -524,7 +524,7 @@ class StrArgParser:
     def write_file(self, line, end="\n"):
         self.f_tmp.write(str(line) + end)
 
-    def __init__(self, description="", input_string=">> ", stripped_down=False, ip_port=None, rlocker=None, allow_net_admin=False):
+    def __init__(self, description="", input_string=">> ", stripped_down=False, ip='127.0.0.1', ip_port=None, rlocker=None, allow_net_admin=False):
         self.commands = dict()
         self.f_tmp = None
         self.description = description
@@ -549,7 +549,7 @@ class StrArgParser:
             self.listen_soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.listen_soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.listen_soc.settimeout(0.2) # timeout for listening
-            self.listen_soc.bind(('127.0.0.1', self.ip_port))
+            self.listen_soc.bind((ip, self.ip_port))
             self.listen_soc.listen(10)
         else:
             self.listen_soc = None
@@ -792,8 +792,9 @@ class StrArgParser:
     def exec_cmd(self, s, _conn=None):
         global __CONN__
         if _conn is not None:
-            prev_CONN = __CONN__
-            __CONN__ = _conn
+            with self.rlocker:
+                prev_CONN = __CONN__
+                __CONN__ = _conn
         
         s = s.strip(' ')
         if len(s) == 0:
@@ -824,7 +825,8 @@ class StrArgParser:
         self.close_f_tmp()
 
         if _conn is not None:
-            __CONN__ = prev_CONN
+            with self.rlocker:
+                __CONN__ = prev_CONN
         
         if self.rlocker is not None:
             # print("Releasing the lock")
@@ -931,7 +933,7 @@ class StrArgParserClient:
                 break
         try:
             rec_data = data.decode()
-        except UnicodeDecodeError:
+        except:
             rec_data = pk.loads(data)
             
         if out_func is not None:
@@ -951,6 +953,8 @@ class StrArgParserClient:
             try:
                 conn_soc.connect((res['1'][0], res['2'][0]))
                 
+                # set the timeout to None
+                conn_soc.settimeout(None)
                 return conn_soc
             except ConnectionRefusedError:
                 out_func("Connection Refused. Trying again")

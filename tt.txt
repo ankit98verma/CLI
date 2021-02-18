@@ -14,6 +14,22 @@ optional arguments:
 
 		----x----
 
+Command input_string
+usage: input_string [-h] [->] [->>]
+
+Prints the string displayed to user asking for the input.
+
+
+
+optional arguments:
+	-h	'str'	--help	Gives the details of the command. No. of values required: 0
+ 	->	'str'	->	Overwrite the output to the file. No. of values required: 1
+ 	->>	'str'	->>	Append the output to the file. No. of values required: 1
+ 
+
+
+		----x----
+
 Command ls_cmd
 usage: ls_cmd [-h] [->] [->>] [-v]
 
