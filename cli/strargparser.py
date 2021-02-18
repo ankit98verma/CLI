@@ -4,6 +4,7 @@ import os
 from time import sleep
 from threading import Thread
 from threading import current_thread
+import pickle as pk
 
 # TODO: Comment the code
 
@@ -857,7 +858,7 @@ class StrArgParser:
             pass
         
         if data:
-            s = data.decode()
+            s = pk.loads(data)
             try:
                 print(("{%s}" % current_thread().name)  + self.input_string + s)
                 self.exec_cmd(s, _conn=_conn)
@@ -917,8 +918,8 @@ class StrArgParserClient:
         
         if conn_soc is None:
             return
-        
-        conn_soc.sendall(s.encode())
+
+        conn_soc.sendall(pk.dumps(s))
         data = b''
         while True:
             try:
@@ -928,7 +929,11 @@ class StrArgParserClient:
             data += data_tmp
             if not data_tmp:
                 break
-        rec_data = data.decode()
+        try:
+            rec_data = data.decode()
+        except UnicodeDecodeError:
+            rec_data = pk.loads(data)
+            
         if out_func is not None:
             out_func(rec_data)
         conn_soc.close()
