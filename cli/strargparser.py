@@ -622,7 +622,7 @@ class StrArgParser:
 
         self.add_command('help', 'Gives details of all the available commands', function=self._help)
         self.add_command('script', "Runs the script.", function=self._script)
-        self.get_command('script').add_infinite_arg("The script files which is to be executed. They will be executed "
+        self.get_command('script').add_infinite_argument("The script files which is to be executed. They will be executed "
                                                     "in order they are provided")
         self.get_command('script').add_optional_argument('-v', '--verbose',
                                                          '_default_out out the commands being executed from '
