@@ -5,6 +5,8 @@ from time import sleep
 from threading import Thread
 from threading import current_thread
 import pickle as pk
+import warnings
+
 
 # TODO: Comment the code
 
@@ -43,25 +45,21 @@ class CommandNotExecuted(Exception):
     def __repr__(self):
         return "'" + self.cmd_name + "' command is not executed"
 
-
 class WrongArgTpe(Exception):
 
     def __init__(self, wrong_arg_type, correct_arg_type):
         super().__init__('WrongArgTpe Exception:Cannot set the argument attributes. Correct argument type is: %s. '
                          'Attributes set for: %s' % (correct_arg_type, wrong_arg_type))
 
-
 class IncompleteArg(Exception):
 
     def __init__(self, arg_details):
         super().__init__('IncompleteArg: Incomplete argument i.e. %s' % arg_details)
 
-
 class AbsentArg(Exception):
 
     def __init__(self, absent_arg):
         super().__init__('AbsentArg Exception: Following argument is missing: \n\t%s' % str(absent_arg))
-
 
 class InsufficientPosArgs(Exception):
 
@@ -69,12 +67,42 @@ class InsufficientPosArgs(Exception):
         super().__init__('InsufficientPosArgs Exception: Insufficient number of positional arguments: Required: %d. '
                          'Provided %d' % (req_arg_nos, provided_arg_nos))
 
-
 class InsufficientNargs(Exception):
 
     def __init__(self, arg, provided_val):
         super().__init__('InsufficientNargs Exception: Number of values for the argument with short form %s required '
                          'is: %d but provided %d values' % (str(arg.sh), arg.narg, provided_val))
+
+
+class Results(dict):
+
+    def __init__(self):
+        super().__init__()
+    
+    def get_argument(self, opt):
+        return self[opt]
+
+    def get_infinity_arguments(self):
+        return self['inf']
+
+    def get_positional_arguments(self, pos=None):
+        if pos is not None:
+            if pos <= 0:
+                raise KeyError("Position value should be 1 or greater")
+            pos = str(pos)
+            return {pos: self[str(pos)]}
+        else:
+            res = {}
+            for k, v in self.items():
+                try:
+                    int(k)
+                    res.update({k: v})
+                except ValueError:
+                    pass
+            return res
+    
+    def is_present(self, opt):
+        return opt in self.keys()
 
 
 class Arguments(dict):
@@ -280,7 +308,7 @@ class ArgumentManager:
             # All the compulsory options have been their short term forms
 
         if self.has_opt_args():
-            # the compulsory arguments are present
+            # the optional arguments are present
             shs = self.get_opt_list(Arguments.SH_INFO_TYPE)
             lfs = self.get_opt_list(Arguments.LF_INFO_TYPE)
             # go through each element in the options and convert to sh if need be
@@ -294,8 +322,9 @@ class ArgumentManager:
     def build_bundle(self, std_opts):
         # bundle up the compulsory args
 
-        res = dict()
-        # ake care of compulsory arguments
+        # NOTE
+        res = Results()
+        # take care of compulsory arguments
         std_opts, res_tmp = self._bundle_comp_opt_args(std_opts, Arguments.ARG_TYPES['COM'])
         res.update(res_tmp)
 
@@ -425,6 +454,8 @@ class Command:
         self.command_name = command_name
         self._arg_manager = ArgumentManager()
 
+        Command.verify_func_def(function)
+        
         self.function = function
 
     def __repr__(self):
@@ -450,7 +481,6 @@ class Command:
                 raise IllegalFunctionDefException(str(func) + " missing 'res' parameter")
 
     def set_function(self, function):
-        # TODO: Check the function def first
         Command.verify_func_def(function)
         self.function = function
 
@@ -463,6 +493,12 @@ class Command:
         out_func(string)
 
     def add_infinite_arg(self, description, param_type=str):
+        warnings.filterwarnings("default", category=DeprecationWarning)
+        warnings.warn("This method is deprecated. It will be removed in future versions. Please use 'add_infinite_argument' method instead.", DeprecationWarning)
+        
+        self._arg_manager.add_inf_arg(description, param_type)
+
+    def add_infinite_argument(self, description, param_type=str):
         self._arg_manager.add_inf_arg(description, param_type)
 
     def add_positional_argument(self, description, param_type=str):
@@ -477,7 +513,7 @@ class Command:
     def decode_options(self, options):
 
         std_options = self._arg_manager.standardize_args(options)
-        # hand the Absent argument error here
+        
         if '-h' in std_options:
             bundle = {'-h': []}
             return bundle
@@ -586,7 +622,7 @@ class StrArgParser:
 
         self.add_command('help', 'Gives details of all the available commands', function=self._help)
         self.add_command('script', "Runs the script.", function=self._script)
-        self.get_command('script').add_infinite_arg("The script files which is to be executed. They will be executed "
+        self.get_command('script').add_infinite_argument("The script files which is to be executed. They will be executed "
                                                     "in order they are provided")
         self.get_command('script').add_optional_argument('-v', '--verbose',
                                                          '_default_out out the commands being executed from '
@@ -595,12 +631,21 @@ class StrArgParser:
     def __repr__(self):
         return self.description
 
+    def __getitem__(self, cmd_name):
+        return self.get_command(cmd_name)
+
+    def __setitem__(self, cmd_name:str, cmd_obj:Command):
+        cmd_obj.add_optional_argument('-h', '--help', 'Gives the details of the command', narg=0)
+        cmd_obj.add_optional_argument('->', '->', 'Overwrite the output to the file')
+        cmd_obj.add_optional_argument('->>', '->>', 'Append the output to the file')
+        
+        self.commands[cmd_name] = cmd_obj
+
     def get_command(self, name):
         return self.commands[name]
 
     def add_command(self, command, description, function):
         # verify the function defintion
-        Command.verify_func_def(function)
         c = Command(command, description, function)
 
         c.add_optional_argument('-h', '--help', 'Gives the details of the command', narg=0)
@@ -812,7 +857,7 @@ class StrArgParser:
         if len(s) == 0:
             return True
         
-        s = self._preprocess_input(s.strip(' '))
+        # s = self._preprocess_input(s.strip(' '))
 
         (_, res, func, out_func) = self.decode_command(s)
         exec_res = False
@@ -855,7 +900,7 @@ class StrArgParser:
             try:
                 _conn, addr = listen_soc.accept()
                 # print("Connected to %s" % str(addr))
-                self.th_manager.run_new_thread('Conn_%d:%s' % (i, addr[0]), self._accept_network_cmd, (_conn, ))
+                self.th_manager.run_new_thread('Conn_%d:%s' % (i, addr[0]), self._accept_network_cmd, (_conn, addr, ))
                 i += 1
             except socket.timeout:
                 pass
@@ -864,7 +909,7 @@ class StrArgParser:
         
         listen_soc.close()
     
-    def _accept_network_cmd(self, _conn):
+    def _accept_network_cmd(self, _conn, _addr):
         try:
             data = _conn.recv(5120)
         except OSError:

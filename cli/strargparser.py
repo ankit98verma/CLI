@@ -712,16 +712,16 @@ class StrArgParser:
             raise IncompleteArg("Double quote not closed.")
 
         single_q_strs.extend(double_q_strs)
-
+        replace_str = "\%\%S$S\%\%"
         for s_inst in single_q_strs:
-            s_inst_u = s_inst.replace(' ', '_')
+            s_inst_u = s_inst.replace(' ', replace_str)
             input_str = input_str.replace(s_inst, s_inst_u)
 
         # now split based on ' '
         opts = input_str.split(' ')
         for i, opts_inst in enumerate(opts):
             if "'" in opts_inst or '"' in opts_inst:
-                opts[i] = opts_inst.strip('"').strip("'").replace('_', ' ')
+                opts[i] = opts_inst.strip('"').strip("'").replace(replace_str, ' ')
             opts[i] = opts[i].strip(' ')
 
         return opts
@@ -900,7 +900,7 @@ class StrArgParser:
             try:
                 _conn, addr = listen_soc.accept()
                 # print("Connected to %s" % str(addr))
-                self.th_manager.run_new_thread('Conn_%d:%s' % (i, addr[0]), self._accept_network_cmd, (_conn, ))
+                self.th_manager.run_new_thread('Conn_%d:%s' % (i, addr[0]), self._accept_network_cmd, (_conn, addr, ))
                 i += 1
             except socket.timeout:
                 pass
@@ -909,7 +909,7 @@ class StrArgParser:
         
         listen_soc.close()
     
-    def _accept_network_cmd(self, _conn):
+    def _accept_network_cmd(self, _conn, _addr):
         try:
             data = _conn.recv(5120)
         except OSError:
