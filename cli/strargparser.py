@@ -219,8 +219,7 @@ class ArgumentManager:
 
     def add_inf_arg(self, description, param_type):
         if len(self.inf_args):
-            _default_out("Cannot add more than one infinity vars")
-            return
+            raise ValueError("Cannot add more than one infinity vars")
 
         arg = Arguments(Arguments.ARG_TYPES['INF'])
         arg.set_infinity_attr(description, param_type)
@@ -467,9 +466,16 @@ class Command:
     @staticmethod
     def verify_func_def(func):
         param_list = list(inspect.signature(func).parameters.keys())
-        if len(param_list) >= 3:
+        if len(param_list) >= 4:
             raise IllegalFunctionDefException(str(func))
 
+        if len(param_list) == 3:
+            if 'res' not in param_list:
+                raise IllegalFunctionDefException(str(func) + " missing 'res' parameter")
+            if 'out_func' not in param_list:
+                raise IllegalFunctionDefException(str(func) + " missing 'out_func' parameter")
+            if 'out_func_kwargs' not in param_list:
+                raise IllegalFunctionDefException(str(func) + " missing 'out_func_kwargs' parameter")
         if len(param_list) == 2:
             if 'res' not in param_list:
                 raise IllegalFunctionDefException(str(func) + " missing 'res' parameter")
@@ -484,13 +490,14 @@ class Command:
         Command.verify_func_def(function)
         self.function = function
 
-    def show_help(self, out_func=_default_out):
+    # def show_help(self, out_func=_default_out):
+    def show_help(self, out_func, out_func_kwargs):
         string = self.__repr__()
         string += "\n\n"
         string += self.description + "\n"
         string += "\n"
         string += self._arg_manager.get_desc()
-        out_func(string)
+        out_func(string, **out_func_kwargs)
 
     def add_infinite_arg(self, description, param_type=str):
         warnings.filterwarnings("default", category=DeprecationWarning)
@@ -518,18 +525,9 @@ class Command:
             bundle = {'-h': []}
             return bundle
 
-        bundle = None
-        try:
-            bundle = self._arg_manager.build_bundle(std_options)
-        except InsufficientNargs as e:
-            _default_out(e)
-        except AbsentArg as e:
-            _default_out(e)
-        except InsufficientPosArgs as e:
-            _default_out(e)
-        except ValueError as e:
-            _default_out(e)
-
+       
+        bundle = self._arg_manager.build_bundle(std_options)
+        
         return bundle
 
 class ThreadException(Exception):
@@ -612,6 +610,13 @@ class StrArgParser:
         
         self.th_manager = ParserThreadManager(self.rlocker)
 
+        self.default_out = print
+        self.default_kwargs = {}
+
+    def set_default_out(self, default_out, **default_kwargs):
+        self.default_out = default_out
+        self.default_kwargs = default_kwargs
+
     def get_cmd_list(self):
         return self.commands.keys()
 
@@ -669,7 +674,7 @@ class StrArgParser:
             input_s = "script -v " + input_s
             return input_s
         else:
-            _default_out(input_s + " is neither a command nor a script")
+            self.default_out(input_s + " is neither a command nor a script", **self.default_kwargs)
             raise CommandNotExecuted(input_s)
 
     @staticmethod
@@ -735,19 +740,24 @@ class StrArgParser:
         try:
             s = StrArgParser._get_options(s)
         except IncompleteArg as e:
-            _default_out(e)
-            return None, None, None, _default_out
+            self.default_out(e, **self.default_kwargs)
+            return None, None, None, self.default_out
 
         try:
             s.remove('')
         except ValueError:
             pass
         try:
-            res = self.commands[s[0]].decode_options(s[1:])
-            out_func = _default_out
+            try:
+                res = self.commands[s[0]].decode_options(s[1:])
+            except (InsufficientNargs, AbsentArg, InsufficientPosArgs, ValueError) as e:
+                self.default_out(e, **self.default_kwargs)
+                res = None
+
+            out_func = self.default_out
 
             if res is None:
-                return None, None, None, _default_out
+                return None, None, None, self.default_out
 
             ls_key = list(res.keys())
             c = None
@@ -759,43 +769,43 @@ class StrArgParser:
                 self.f_tmp = open(res[c[:-1]][0], c[-1])
                 out_func = self.write_file
             if '-h' in ls_key:
-                self.commands[s[0]].show_help(out_func=out_func)
+                self.commands[s[0]].show_help(out_func=out_func, out_func_kwargs=self.default_kwargs)
                 self.close_f_tmp()
                 return None, None, None, None
 
             return s[0], res, self.commands[s[0]].function, out_func
         except KeyError:
-            _default_out("Command not found. Use 'help' command.")
-            return None, None, None, _default_out
+            self.default_out("Command not found. Use 'help' command.", **self.default_kwargs)
+            return None, None, None, self.default_out
 
     def _exit_prog(self, res):        
         self.is_loop = False
         self.is_conn_loop = False
-        _default_out("Exited")
+        self.default_out("Exited", **self.default_kwargs)
 
         return True
 
-    def _input_string(self, res, out_func=_default_out):
-        out_func(self.get_input_string())
+    def _input_string(self, res, out_func, out_func_kwargs):
+        out_func(self.get_input_string(), **out_func_kwargs)
 
         return True
 
-    def _ls_cmd(self, res, out_func=_default_out):
+    def _ls_cmd(self, res, out_func, out_func_kwargs):
         is_verbose = '-v' in list(res.keys())
         for k, v in self.commands.items():
-            out_func("Command: " + k),
+            out_func("Command: " + k, **out_func_kwargs)
             if is_verbose:
-                out_func(v)
-                out_func("\n" + v.description + "\n\n\t\t---x---\n")
+                out_func(v, **out_func_kwargs)
+                out_func("\n" + v.description + "\n\n\t\t---x---\n", **out_func_kwargs)
 
-    def _help(self, res, out_func=_default_out):
+    def _help(self, res, out_func, out_func_kwargs):
         for k, v in self.commands.items():
-            out_func("Command " + k)
-            v.show_help(out_func=out_func)
-            out_func("\t\t----x----\n")
+            out_func("Command " + k, **out_func_kwargs)
+            v.show_help(out_func=out_func, out_func_kwargs=out_func_kwargs)
+            out_func("\t\t----x----\n", **out_func_kwargs)
         self.close_f_tmp()
 
-    def _script(self, res, out_func=_default_out):
+    def _script(self, res, out_func, out_func_kwargs):
         exec_res = True
         stop_exec = False
 
@@ -814,16 +824,16 @@ class StrArgParser:
                             if exec_res is False:
                                 stop_exec = True
                                 out_func("Error: Stopping the script because the command at line no. %d of script file '%s' "
-                                         "return False" % (i-1, files))
+                                         "return False" % (i-1, files), **out_func_kwargs)
                                 break
                             continue
                             
                         if '-v' in res:
-                            out_func(self.input_string + line)
+                            out_func(self.input_string + line, **out_func_kwargs)
                         try:
                             exec_res = self.exec_cmd(line)
                         except CommandNotExecuted as e:
-                            _default_out(e)
+                            self.default_out(e, **self.default_kwargs)
                             stop_exec = True
                             break
                     if not self.is_loop:
@@ -832,11 +842,11 @@ class StrArgParser:
                     exec_res = False
                     break
         except FileNotFoundError as e:
-            out_func('The file not found.')
-            out_func(e)
+            out_func('The file not found.', **out_func_kwargs)
+            out_func(e, **out_func_kwargs)
             raise CommandNotExecuted('script')
         except UnicodeDecodeError:
-            out_func('The data_struct in the file is corrupted')
+            out_func('The data_struct in the file is corrupted', **out_func_kwargs)
             raise CommandNotExecuted('script')
 
         return exec_res
@@ -856,8 +866,6 @@ class StrArgParser:
         s = s.strip(' ')
         if len(s) == 0:
             return True
-        
-        # s = self._preprocess_input(s.strip(' '))
 
         (_, res, func, out_func) = self.decode_command(s)
         exec_res = False
@@ -871,7 +879,9 @@ class StrArgParser:
 
         # add conn to the res before passing it to the func
         res['conn'] = _conn
-        if 'res' in param_list and 'out_func' in param_list:
+        if 'res' in param_list and 'out_func' in param_list and 'out_func_kwargs' in param_list:
+            exec_res = func(res, out_func=out_func, out_func_kwargs=self.default_kwargs)
+        elif 'res' in param_list and 'out_func' in param_list:
             exec_res = func(res, out_func=out_func)
         elif 'res' in param_list:
             exec_res = func(res)
@@ -894,7 +904,7 @@ class StrArgParser:
         return exec_res
 
     def _get_conn(self, listen_soc):
-        _default_out("Waiting for the connection...")
+        self.default_out("Waiting for the connection...", **self.default_kwargs)
         i = 0
         while self.is_conn_loop:
             try:
@@ -905,7 +915,7 @@ class StrArgParser:
             except socket.timeout:
                 pass
         
-        _default_out("Stopped listening for connections...")
+        self.default_out("Stopped listening for connections...", **self.default_kwargs)
         
         listen_soc.close()
     
@@ -921,7 +931,7 @@ class StrArgParser:
                 print(("{%s}" % current_thread().name)  + self.input_string + s)
                 self.exec_cmd(s, _conn=_conn)
             except CommandNotExecuted as e:
-                _default_out(e)
+                self.default_out(e, **self.default_kwargs)
         
         # close the connetion now
         _conn.close()
@@ -932,7 +942,7 @@ class StrArgParser:
             try:
                 self.exec_cmd(s)
             except CommandNotExecuted as e:
-                _default_out(e)
+                self.default_out(e, **self.default_kwargs)
     
     def run(self):
         self.is_loop = True

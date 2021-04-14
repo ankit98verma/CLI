@@ -15,11 +15,14 @@ def c1(res, out_func):
     out_func(res.is_present('-f'))
 
 
+def new_out(msg, prefix=''):
+    print("%s: %s" % (prefix, msg))
 
 if __name__ == '__main__':
     rlck = RLock()
 
     par = argp.StrArgParser(description="Parser 1", ip_port=5000, rlocker=rlck, input_string="hello>> ")
+    par.set_default_out(new_out, prefix='AA')
     print(par)
 
     par['c1'] = argp.Command('c1', "Command 1", function=c1)
@@ -39,7 +42,7 @@ if __name__ == '__main__':
     # par.get_command('c1').add_positional_argument('First pos arg', param_type=int)
     # par.get_command('c1').add_positional_argument('Second pos arg', param_type=float)
 
-    print(par.get_command('c1').show_help())
+    # print(par.get_command('c1').show_help())
 
     par.run()
 
