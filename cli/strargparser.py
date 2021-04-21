@@ -1021,7 +1021,7 @@ class StrArgParser:
             while self.is_loop:
                 self.th_manager.update_thread_list()
         else:
-            self._accept_local_cmd()
+            self._accept_local_cmd(local_script)
         
         # print("Joining the threads")
         self.th_manager.stop_threads()
