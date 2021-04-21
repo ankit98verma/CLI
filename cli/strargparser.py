@@ -993,15 +993,21 @@ class StrArgParser:
         # close the connetion now
         _conn.close()
     
-    def _accept_local_cmd(self):
+    def _accept_local_cmd(self, script):
         while self.is_loop:
+            if script is not None:
+                try:
+                    self.exec_cmd('script -v %s' % script)
+                except CommandNotExecuted as e:
+                    self.cstd_err(e, **self.default_kwargs)
+            
             s = input(self.input_string)
             try:
                 self.exec_cmd(s)
             except CommandNotExecuted as e:
                 self.cstd_err(e, **self.default_kwargs)
     
-    def run(self):
+    def run(self, local_script=None):
         self.is_loop = True
         
         if self.ip_port is not None:
@@ -1009,7 +1015,7 @@ class StrArgParser:
             self.th_manager.run_new_thread("NetCMD", self._get_conn, args=(self.listen_soc,))
             
             # create a thread for local command accept
-            self.th_manager.run_new_thread("LocalCMD", self._accept_local_cmd, args=())
+            self.th_manager.run_new_thread("LocalCMD", self._accept_local_cmd, args=(local_script, ))
 
             # start the threads management
             while self.is_loop:
