@@ -78,15 +78,18 @@ optional arguments:
  
 infinite positional:
 	Type 'str'
-	are allowed
+		are allowed
 
 		----x----
 
 Command c1
-usage: c1 [-h] [->] [->>] -f -c List of integers...
+usage: c1 [-h] [->] [->>] -f -c 1 2 List of integers...
 
 Command 1
 
+positional arguments (all compulsory):
+	1	'int'	1	First pos arg. No. of values required: 1
+	2	'float'	2	Second pos arg. No. of values required: 1
 
 compulsory arguments:
 	-f	'str'	--file	The file name. No. of values required: -1
@@ -99,7 +102,7 @@ optional arguments:
  
 infinite positional:
 	Type 'int'
-	are allowed
+		are allowed
 
 		----x----
 

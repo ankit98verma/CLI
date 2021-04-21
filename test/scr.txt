@@ -1,6 +1,10 @@
 # This is testing the commenting part ls_cmd
 ls_cmd -v
+?
+sdfds
+
 help -> tt.txt
 c1 -f "aaa bb 'cc'" new -c 123213 2 3
 ?
-exit
+sdfds
+?

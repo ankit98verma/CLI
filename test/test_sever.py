@@ -6,23 +6,26 @@ def exit_prog(out_func):
     out_func("yeah! exiting")
 
 
-def c1(res, out_func):
-    out_func("C1:")
-    out_func(res)
-    out_func(res.get_positional_arguments())
-    out_func(res.get_positional_arguments(1))
-    out_func(res.get_infinity_arguments())
-    out_func(res.is_present('-f'))
+def c1(res, out_func, out_func_err, out_func_kwargs):
+    out_func("C1:", **out_func_kwargs)
+    out_func(res, **out_func_kwargs)
+    out_func(res.get_positional_arguments(), **out_func_kwargs)
+    out_func(res.get_positional_arguments(1), **out_func_kwargs)
+    out_func(res.get_infinity_arguments(), **out_func_kwargs)
+    out_func_err(res.is_present('-f'), **out_func_kwargs)
 
 
 def new_out(msg, prefix=''):
     print("%s: %s" % (prefix, msg))
 
+def new_out_err(msg, prefix=''):
+    print("error: %s: %s" % (prefix, msg))
+
 if __name__ == '__main__':
     rlck = RLock()
 
     par = argp.StrArgParser(description="Parser 1", ip_port=5000, rlocker=rlck, input_string="hello>> ")
-    par.set_default_out(new_out, prefix='AA')
+    par.set_default_out(new_out, new_out_err, prefix='AA')
     print(par)
 
     par['c1'] = argp.Command('c1', "Command 1", function=c1)

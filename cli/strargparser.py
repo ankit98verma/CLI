@@ -466,21 +466,45 @@ class Command:
     @staticmethod
     def verify_func_def(func):
         param_list = list(inspect.signature(func).parameters.keys())
-        if len(param_list) >= 4:
+        if len(param_list) > 4:
             raise IllegalFunctionDefException(str(func))
+
+        if len(param_list) == 4:
+            if 'res' not in param_list:
+                raise IllegalFunctionDefException(str(func) + " missing 'res' parameter")
+            if 'out_func' not in param_list:
+                raise IllegalFunctionDefException(str(func) + " missing 'out_func' parameter")
+            if 'out_func_err' not in param_list:
+                raise IllegalFunctionDefException(str(func) + " missing 'out_func_err' parameter")
+            if 'out_func_kwargs' not in param_list:
+                raise IllegalFunctionDefException(str(func) + " missing 'out_func_kwargs' parameter")
 
         if len(param_list) == 3:
             if 'res' not in param_list:
                 raise IllegalFunctionDefException(str(func) + " missing 'res' parameter")
-            if 'out_func' not in param_list:
-                raise IllegalFunctionDefException(str(func) + " missing 'out_func' parameter")
-            if 'out_func_kwargs' not in param_list:
-                raise IllegalFunctionDefException(str(func) + " missing 'out_func_kwargs' parameter")
+            error = True
+            if 'out_func' in param_list and  'out_func_err' in param_list:
+                error = False
+            if 'out_func' in param_list and  'out_func_kwargs' in param_list:
+                error = False
+            if 'out_func_err' in param_list and  'out_func_kwargs' in param_list:
+                error = False
+            if error:
+                raise IllegalFunctionDefException(str(func) + " the paramters could be one of the following:  \n ['out_func', 'out_func_err'] \n ['out_func', 'out_func_kwargs'] \n ['out_func_err', 'out_func_kwargs']")
+
         if len(param_list) == 2:
             if 'res' not in param_list:
                 raise IllegalFunctionDefException(str(func) + " missing 'res' parameter")
-            if 'out_func' not in param_list:
-                raise IllegalFunctionDefException(str(func) + " missing 'out_func' parameter")
+            
+            error = True
+            if 'out_func' in param_list:
+                error = False
+            if 'out_func_kwargs' in param_list:
+                error = False
+            if 'out_func_err' in param_list:
+                error = False
+            if error:
+                raise IllegalFunctionDefException(str(func) + " the paramters could be one of the following:  \n 'out_func' \n 'out_func_kwargs' \n 'out_func_err'")
         else:
             # there is only one parameter
             if 'res' not in param_list:
@@ -573,7 +597,7 @@ class StrArgParser:
 
     INF = -1
 
-    def write_file(self, line, end="\n"):
+    def write_file(self, line, end="\n", **kwargs):
         self.f_tmp.write(str(line) + end)
 
     def __init__(self, description="", input_string=">> ", stripped_down=False, ip='127.0.0.1', ip_port=None, rlocker=None, allow_net_admin=False, internal_lock=True):
@@ -610,11 +634,18 @@ class StrArgParser:
         
         self.th_manager = ParserThreadManager(self.rlocker)
 
-        self.default_out = print
+        self.cstd_out = print
+        self.cstd_err = print
         self.default_kwargs = {}
 
-    def set_default_out(self, default_out, **default_kwargs):
-        self.default_out = default_out
+    def set_default_out(self, cstd_out, cstd_err, **default_kwargs):
+        self.cstd_out = cstd_out
+        self.cstd_err = cstd_err
+        self.default_kwargs = default_kwargs
+    
+    def set_std_outs(self, cstd_out, cstd_err, **default_kwargs):
+        self.cstd_out = cstd_out
+        self.cstd_err = cstd_err
         self.default_kwargs = default_kwargs
 
     def get_cmd_list(self):
@@ -674,7 +705,7 @@ class StrArgParser:
             input_s = "script -v " + input_s
             return input_s
         else:
-            self.default_out(input_s + " is neither a command nor a script", **self.default_kwargs)
+            self.cstd_err(input_s + " is neither a command nor a script", **self.default_kwargs)
             raise CommandNotExecuted(input_s)
 
     @staticmethod
@@ -740,8 +771,8 @@ class StrArgParser:
         try:
             s = StrArgParser._get_options(s)
         except IncompleteArg as e:
-            self.default_out(e, **self.default_kwargs)
-            return None, None, None, self.default_out
+            self.cstd_err(e, **self.default_kwargs)
+            return None, None, None, self.cstd_out, self.cstd_err
 
         try:
             s.remove('')
@@ -751,13 +782,14 @@ class StrArgParser:
             try:
                 res = self.commands[s[0]].decode_options(s[1:])
             except (InsufficientNargs, AbsentArg, InsufficientPosArgs, ValueError) as e:
-                self.default_out(e, **self.default_kwargs)
+                self.cstd_err(e, **self.default_kwargs)
                 res = None
 
-            out_func = self.default_out
+            out_func = self.cstd_out
+            out_func_err = self.cstd_err
 
             if res is None:
-                return None, None, None, self.default_out
+                return None, None, None, self.cstd_out, self.cstd_err
 
             ls_key = list(res.keys())
             c = None
@@ -768,20 +800,21 @@ class StrArgParser:
             if c is not None:
                 self.f_tmp = open(res[c[:-1]][0], c[-1])
                 out_func = self.write_file
+                out_func_err = self.write_file
             if '-h' in ls_key:
                 self.commands[s[0]].show_help(out_func=out_func, out_func_kwargs=self.default_kwargs)
                 self.close_f_tmp()
-                return None, None, None, None
+                return None, None, None, None, None
 
-            return s[0], res, self.commands[s[0]].function, out_func
+            return s[0], res, self.commands[s[0]].function, out_func, out_func_err
         except KeyError:
-            self.default_out("Command not found. Use 'help' command.", **self.default_kwargs)
-            return None, None, None, self.default_out
+            self.cstd_err("Command not found. Use 'help' command.", **self.default_kwargs)
+            return None, None, None, self.cstd_out
 
     def _exit_prog(self, res):        
         self.is_loop = False
         self.is_conn_loop = False
-        self.default_out("Exited", **self.default_kwargs)
+        self.cstd_out("Exited", **self.default_kwargs)
 
         return True
 
@@ -833,9 +866,10 @@ class StrArgParser:
                         try:
                             exec_res = self.exec_cmd(line)
                         except CommandNotExecuted as e:
-                            self.default_out(e, **self.default_kwargs)
-                            stop_exec = True
-                            break
+                            exec_res = False
+                            self.cstd_err(e, **self.default_kwargs)
+                            # stop_exec = True
+                            # break
                     if not self.is_loop:
                         break
                 if not self.is_loop or stop_exec:
@@ -867,7 +901,7 @@ class StrArgParser:
         if len(s) == 0:
             return True
 
-        (_, res, func, out_func) = self.decode_command(s)
+        (_, res, func, out_func, out_func_err) = self.decode_command(s)
         exec_res = False
         if res is None:
             return exec_res
@@ -879,15 +913,38 @@ class StrArgParser:
 
         # add conn to the res before passing it to the func
         res['conn'] = _conn
-        if 'res' in param_list and 'out_func' in param_list and 'out_func_kwargs' in param_list:
-            exec_res = func(res, out_func=out_func, out_func_kwargs=self.default_kwargs)
-        elif 'res' in param_list and 'out_func' in param_list:
-            exec_res = func(res, out_func=out_func)
-        elif 'res' in param_list:
-            exec_res = func(res)
+        if 'res' in param_list:
+            if 'out_func_err' in param_list and 'out_func' in param_list:
+                if 'out_func_kwargs' in param_list:
+                    exec_res = func(res, out_func=out_func, out_func_err=out_func_err, out_func_kwargs=self.default_kwargs)
+                else:
+                    exec_res = func(res, out_func=out_func, out_func_err=out_func_err)
+            elif 'out_func' in param_list:
+                if 'out_func_kwargs' in param_list:
+                    exec_res = func(res, out_func=out_func, out_func_kwargs=self.default_kwargs)
+                else:
+                    exec_res = func(res, out_func=out_func)
+            elif 'out_func_err' in param_list:
+                if 'out_func_kwargs' in param_list:
+                    exec_res = func(res, out_func_err=out_func_err, out_func_kwargs=self.default_kwargs)
+                else:
+                    exec_res = func(res, out_func_err=out_func_err)
+            else:
+                exec_res = func(res)
         else:
-            # this should never happen because we are verifying the function definition
             raise Exception("Something went very wrong! Contact for support.")
+        
+        # if 'res' in param_list and 'out_func_err' in param_list and 'out_func_kwargs' in param_list:
+        #     exec_res = func(res, out_func_err=out_func_err, out_func_kwargs=self.default_kwargs)
+        # if 'res' in param_list and 'out_func' in param_list and 'out_func_kwargs' in param_list:
+        #     exec_res = func(res, out_func=out_func, out_func_kwargs=self.default_kwargs)
+        # elif 'res' in param_list and 'out_func' in param_list:
+        #     exec_res = func(res, out_func=out_func)
+        # elif 'res' in param_list:
+        #     exec_res = func(res)
+        # else:
+        #     # this should never happen because we are verifying the function definition
+        #     raise Exception("Something went very wrong! Contact for support.")
 
         self.close_f_tmp()
 
@@ -904,7 +961,7 @@ class StrArgParser:
         return exec_res
 
     def _get_conn(self, listen_soc):
-        self.default_out("Waiting for the connection...", **self.default_kwargs)
+        self.cstd_out("Waiting for the connection...", **self.default_kwargs)
         i = 0
         while self.is_conn_loop:
             try:
@@ -915,7 +972,7 @@ class StrArgParser:
             except socket.timeout:
                 pass
         
-        self.default_out("Stopped listening for connections...", **self.default_kwargs)
+        self.cstd_out("Stopped listening for connections...", **self.default_kwargs)
         
         listen_soc.close()
     
@@ -931,7 +988,7 @@ class StrArgParser:
                 print(("{%s}" % current_thread().name)  + self.input_string + s)
                 self.exec_cmd(s, _conn=_conn)
             except CommandNotExecuted as e:
-                self.default_out(e, **self.default_kwargs)
+                self.cstd_err(e, **self.default_kwargs)
         
         # close the connetion now
         _conn.close()
@@ -942,7 +999,7 @@ class StrArgParser:
             try:
                 self.exec_cmd(s)
             except CommandNotExecuted as e:
-                self.default_out(e, **self.default_kwargs)
+                self.cstd_err(e, **self.default_kwargs)
     
     def run(self):
         self.is_loop = True
