@@ -184,8 +184,11 @@ class Arguments(dict):
 
     def __repr__(self):
         string = ''
-        string += self.sh + "\t" + str(self.data_type).replace('<class ', "").replace(">", "") + "\t" + self.lf + "\t" \
-                  + self.des + ". No. of values required: " + str(self.narg) + "\n"
+        # string += self.sh + "\t" + str(self.data_type).replace('<class ', "").replace(">", "") + "\t" + self.lf + "\t" \
+        #           + self.des + "\tNo. of values required: " + str(self.narg) + "\n"
+        string += self.sh + "\t" + self.lf + "\t\t" +  str(self.data_type.__name__) + "\t" \
+                  + self.des + "\tNo. of values required: " + str(self.narg) + "\n"
+        
         return string
 
     def __getattr__(self, name):
@@ -994,13 +997,13 @@ class StrArgParser:
         _conn.close()
     
     def _accept_local_cmd(self, script):
-        while self.is_loop:
-            if script is not None:
-                try:
-                    self.exec_cmd('script -v %s' % script)
-                except CommandNotExecuted as e:
-                    self.cstd_err(e, **self.default_kwargs)
-            
+        # if script is not None:
+        #     try:
+        #         self.exec_cmd('script -v %s' % script)
+        #     except CommandNotExecuted as e:
+        #         self.cstd_err(e, **self.default_kwargs)
+        
+        while self.is_loop:    
             s = input(self.input_string)
             try:
                 self.exec_cmd(s)
